@@ -1,6 +1,8 @@
-# SquadOpt
+<h1 align="center">
+  <img src="docs/assets/squadopt-logo.svg" alt="SquadOpt" width="460">
+</h1>
 
-> Prescriptive analytics engine for team formation — blending HR management with Operations Research.
+<p align="center"><em>Prescriptive analytics engine for team formation — blending HR management with Operations Research.</em></p>
 
 Instead of guessing who works best where, SquadOpt treats team formation as a **multi-objective MILP**: it allocates each person's time, in 0.2-FTE steps, to the skills a project needs, and lets managers tune objective weights to reflect their priorities.
 
@@ -407,5 +409,7 @@ When the hard constraints admit no team, the solver relaxes them one at a time t
 The source code is released under the [MIT License](LICENSE).
 
 ## Trademark
+
+<img src="docs/assets/squadopt-icon.svg" alt="SquadOpt icon" width="64" align="right">
 
 "SquadOpt" and the SquadOpt logo are trademarks of Maxence Queyrel. The MIT License covers the code only and grants no right to use the name or logo. You may fork and modify the code, but a redistributed or hosted fork must use a different name and logo and must not suggest that it is endorsed by the SquadOpt project.

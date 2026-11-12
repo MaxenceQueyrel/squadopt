@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="topHalfGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0B1F3A" />
+      <stop offset="100%" stop-color="#0E7490" />
+    </linearGradient>
+    <linearGradient id="botHalfGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0891B2" />
+      <stop offset="100%" stop-color="#00D4C8" />
+    </linearGradient>
+    <linearGradient id="frameGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0B1F3A" />
+      <stop offset="50%" stop-color="#0E7490" />
+      <stop offset="100%" stop-color="#00D4C8" />
+    </linearGradient>
+  </defs>
+
+  <polygon points="50,6 88,28 88,72 50,94 12,72 12,28" fill="none" stroke="url(#frameGrad)" stroke-width="2.8" stroke-linejoin="round" stroke-opacity="0.8" />
+
+  <g stroke="url(#frameGrad)" stroke-width="1.6" stroke-opacity="0.35">
+    <line x1="50" y1="6" x2="50" y2="20" />
+    <line x1="88" y1="28" x2="72" y2="33" />
+    <line x1="12" y1="28" x2="28" y2="33" />
+    <line x1="88" y1="72" x2="72" y2="67" />
+    <line x1="12" y1="72" x2="28" y2="67" />
+    <line x1="50" y1="94" x2="50" y2="80" />
+  </g>
+
+  <!-- Upper Block -->
+  <polygon points="50,20 72,33 61,39 50,33 39,39 67,55 56,61 28,45 28,33" fill="url(#topHalfGrad)" />
+
+  <!-- Lower Block -->
+  <polygon points="50,80 28,67 39,61 50,67 61,61 33,45 44,39 72,55 72,67" fill="url(#botHalfGrad)" />
+
+  <circle cx="50" cy="6" r="4.2" fill="#0E7490" />
+  <circle cx="88" cy="28" r="4.2" fill="#00B8C4" />
+  <circle cx="88" cy="72" r="4.2" fill="#00D4C8" />
+  <circle cx="50" cy="94" r="4.2" fill="#0891B2" />
+  <circle cx="12" cy="72" r="4.2" fill="#0B1F3A" />
+  <circle cx="12" cy="28" r="4.2" fill="#0C3E6B" />
+</svg>
