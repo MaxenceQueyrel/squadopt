@@ -189,7 +189,7 @@ export default function Layout() {
           }}
         >
           <LogoMark />
-          Team Manager
+          SquadOpt
         </div>
         <OrganizationSwitcher />
         <ul

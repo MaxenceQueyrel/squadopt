@@ -1,4 +1,4 @@
-# Team Manager
+# SquadOpt
 
 > Prescriptive analytics engine for team formation — blending HR management with Operations Research.
 
@@ -9,7 +9,7 @@ Instead of guessing who works best where, the app treats team formation as a **m
 ## Repository layout
 
 ```
-team-manager/
+squadopt/
 ├── frontend/          React 19 + TypeScript + Vite  (managed with bun)
 ├── backend/           Python 3.12 + FastAPI          (managed with uv)
 ├── optimizer/         Pure-Python OR engine          (managed with uv)
@@ -46,8 +46,8 @@ Each module has its own README:
 
 ```bash
 # 1. Clone
-git clone <repo-url> team-manager
-cd team-manager
+git clone <repo-url> squadopt
+cd squadopt
 
 # 2. Copy environment file (edit if needed)
 cp .env.example .env
@@ -75,8 +75,8 @@ See [infra/README.md](infra/README.md) for production and advanced Docker usage.
 
 ```bash
 # 1. Clone & enter
-git clone <repo-url> team-manager
-cd team-manager
+git clone <repo-url> squadopt
+cd squadopt
 
 # 2. Copy env file
 cp .env.example .env
@@ -157,7 +157,7 @@ Every pull request (and every push to `main`/`dev`) runs [.github/workflows/ci.y
 | `lint-frontend` | `make lint-frontend` (biome) |
 | `format-frontend` | `biome format` check (no `--write`) over the frontend source |
 | `build-frontend` | `bun run build` (`tsc -b && vite build`) |
-| `e2e` | `make test-e2e` (Playwright), which provisions its own Postgres — only on pushes to `main` or a manual [workflow dispatch](https://github.com/MaxenceQueyrel/team-manager/actions/workflows/ci.yml), since it spins up the full stack |
+| `e2e` | `make test-e2e` (Playwright), which provisions its own Postgres — only on pushes to `main` or a manual [workflow dispatch](../../actions/workflows/ci.yml), since it spins up the full stack |
 
 A job failing blocks the PR from merging once branch protection on `main`/`dev` requires these checks (Settings → Branches → Branch protection rules → "Require status checks to pass").
 
@@ -309,3 +309,11 @@ $$y_{it} \leq x_{it} \qquad y_{it} \leq x_{i,t+1} \qquad y_{it} \geq x_{it} + x_
 Every phase keeps its own cardinality, forced-inclusion, squad, and chemistry constraints. Because retention is rewarded rather than required, the solver keeps a person across phases when they remain a good-enough fit, trading marginal per-phase skill for team stability — and a person unavailable in a phase simply earns no handover bonus there.
 
 ---
+
+## License
+
+The source code is released under the [MIT License](LICENSE).
+
+## Trademark
+
+"SquadOpt" and the SquadOpt logo are trademarks of Maxence Queyrel. The MIT License covers the code only and grants no right to use the name or logo. You may fork and modify the code, but a redistributed or hosted fork must use a different name and logo and must not suggest that it is endorsed by the SquadOpt project.

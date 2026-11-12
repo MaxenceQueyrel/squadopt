@@ -1,5 +1,5 @@
 [project]
-name = "team-manager-optimizer"
+name = "squadopt-optimizer"
 version = "0.1.0"
 description = "Operations Research engine for team assignment — framework-agnostic"
 requires-python = ">=3.12"
