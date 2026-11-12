@@ -1,4 +1,4 @@
-# Copilot Instructions for Team Manager
+# Copilot Instructions for SquadOpt
 
 This repository is a prescriptive analytics engine for team formation. It models team allocation as a multi-objective Mixed-Integer Linear Program (MILP) solved using PuLP/CBC.
 
@@ -39,7 +39,7 @@ Use the following commands from the **repository root** for routine development,
 The project is structured as a monorepo workspace divided into three main modules:
 
 ```
-team-manager/
+squadopt/
 ├── frontend/          React 19 + TS Single Page Application (vanilla CSS, React Router 7, Zustand)
 ├── backend/           FastAPI web layer; acts as the API boundary and data storage manager
 ├── optimizer/         Pure-Python OR engine (framework-agnostic, zero I/O, zero HTTP)

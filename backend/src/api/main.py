@@ -7,7 +7,7 @@ from api.v1.router import router as v1_router
 settings = get_configs()
 
 app = FastAPI(
-    title="Team Manager API",
+    title="SquadOpt API",
     version="0.1.0",
     description="Team management with Operations Research optimization",
 )

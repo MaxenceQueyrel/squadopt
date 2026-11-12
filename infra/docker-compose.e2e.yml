@@ -1,7 +1,7 @@
 # Throwaway Postgres for the Playwright e2e suite (scripts/test-e2e.sh).
 # Runs under its own compose project on :5433 with data on tmpfs, so it can
 # run alongside the dev stack and every e2e run starts from an empty database.
-name: team-manager-e2e
+name: squadopt-e2e
 
 services:
   postgres:
