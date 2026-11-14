@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { createPerson, createProject, uniqueSuffix } from "./helpers";
+import { createPerson, createProject, pickPerson, uniqueSuffix } from "./helpers";
 
 test("assignment-driven reductions show up on the capacity timeline", async ({ page }) => {
   const suffix = uniqueSuffix();
@@ -11,7 +11,7 @@ test("assignment-driven reductions show up on the capacity timeline", async ({ p
   await createProject(page, projectName);
   await page.getByRole("link", { name: projectName }).click();
   await page.getByRole("button", { name: "Assign person to Whole project" }).click();
-  await page.getByLabel("Person").selectOption({ label: name });
+  await pickPerson(page, name);
   await page.getByLabel("Commitment").selectOption("0.6");
   await page.getByLabel("Start date", { exact: true }).fill("2026-01-01");
   await page.getByLabel("End date", { exact: true }).fill("2026-01-10");

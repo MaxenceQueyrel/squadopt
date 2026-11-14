@@ -2,10 +2,10 @@ import { CircleAlert, CircleCheck, Download, Plus, Upload, X } from "lucide-reac
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useShallow } from "zustand/shallow";
-import { addDays, daysBetween, isoToday } from "@/components/common/dates";
+import { addDays, isoToday } from "@/components/common/dates";
 import { Button, colors, IconButton, PageHeader, Tabs } from "@/components/common/ui";
 import { PersonForm } from "@/components/people/PersonForm";
-import { formatFte, formatHeadcount } from "@/components/projects/staffing";
+import { averageFreeFte, formatFte, formatHeadcount } from "@/components/projects/staffing";
 import { errorMessage, peopleApi } from "@/services/api";
 import { downloadBlob } from "@/services/download";
 import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
@@ -24,14 +24,7 @@ export interface PeopleWorkspaceContext {
 /** Average FTE free per day over the FREE_HORIZON_DAYS days starting `today`, from
  * availability segments that may extend past either end of that window. */
 export function freeNextDays(segments: AvailabilitySegment[], today: string): number {
-  const horizonEnd = addDays(today, FREE_HORIZON_DAYS - 1);
-  let total = 0;
-  for (const segment of segments) {
-    const start = segment.start > today ? segment.start : today;
-    const end = segment.end < horizonEnd ? segment.end : horizonEnd;
-    if (start <= end) total += (daysBetween(start, end) + 1) * segment.ratio;
-  }
-  return total / FREE_HORIZON_DAYS;
+  return averageFreeFte(segments, { start: today, end: addDays(today, FREE_HORIZON_DAYS - 1) });
 }
 
 function summaryLine(people: Person[], freeRatios: Map<string, number>): string {

@@ -1,7 +1,9 @@
+import { daysBetween } from "@/components/common/dates";
 import type { FillTone, PillTone } from "@/components/common/ui";
 import type {
   AssignedMember,
   Assignment,
+  AvailabilitySegment,
   DateRange,
   Person,
   Project,
@@ -133,6 +135,27 @@ function fillStatus(lane: StaffingLane): FillStatus {
 /** A person's level in a skill; like the optimizer, a skill they lack counts as level 0. */
 export function skillLevel(person: Person, skillId: string): number {
   return person.skills.find((s) => s.id === skillId)?.level ?? 0;
+}
+
+/** How well a person covers a set of skill requirements: all of them, some, or none. */
+export type SkillMatchTier = "full" | "partial" | "none";
+
+export function skillMatchTier(person: Person, requirements: SkillRequirement[]): SkillMatchTier {
+  const met = requirements.filter((req) => skillLevel(person, req.id) >= req.min_level).length;
+  if (met === requirements.length) return "full";
+  return met > 0 ? "partial" : "none";
+}
+
+/** Average FTE free per day over `range` (inclusive), from availability segments that may
+ * extend past either end of it; days no segment covers count as fully booked. */
+export function averageFreeFte(segments: AvailabilitySegment[], range: DateRange): number {
+  let total = 0;
+  for (const segment of segments) {
+    const start = segment.start > range.start ? segment.start : range.start;
+    const end = segment.end < range.end ? segment.end : range.end;
+    if (start <= end) total += (daysBetween(start, end) + 1) * segment.ratio;
+  }
+  return total / (daysBetween(range.start, range.end) + 1);
 }
 
 /** Requirements of the lane that no assigned person meets at the required level. */
