@@ -6,6 +6,7 @@ import {
   createProject,
   MANAGER_EMAIL,
   MANAGER_PASSWORD,
+  pickPerson,
   uniqueSuffix,
 } from "./helpers";
 
@@ -312,7 +313,7 @@ test("applying a stale proposal reports the FTE conflict by name", async ({ page
   });
   const lane = page.getByRole("region", { name: "Staffing" });
   await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
-  await lane.getByLabel("Person").selectOption({ label: personName });
+  await pickPerson(lane, personName);
   await lane.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(lane).toContainText("1 of 1 FTE");
 

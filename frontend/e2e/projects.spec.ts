@@ -1,9 +1,18 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
-import { addSkillRequirement, createPerson, createProject, uniqueSuffix } from "./helpers";
+import {
+  addSkillRequirement,
+  createPerson,
+  createProject,
+  pickPerson,
+  uniqueSuffix,
+} from "./helpers";
 
 const PROJECT_CSV_HEADER =
   "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,squads,date_ranges,phases";
+
+const PEOPLE_CSV_HEADER =
+  "id,name,role,seniority,years_of_experience,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
 
 const quote = (value: unknown) => `"${JSON.stringify(value).replace(/"/g, '""')}"`;
 
@@ -71,7 +80,7 @@ test("assigning a person from the project workspace shows the roster entry", asy
 
   const lane = page.getByRole("region", { name: "Staffing" });
   await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
-  await lane.getByLabel("Person").selectOption({ label: personName });
+  await pickPerson(lane, personName);
   // Allocations come in whole days per week only.
   await expect(lane.getByLabel("Commitment").locator("option")).toHaveText([
     "Full-time (5 days/week)",
@@ -140,7 +149,7 @@ test("assigning to a phase uses the phase dates and updates its fill", async ({ 
 
   const design = page.getByRole("region", { name: "design" });
   await design.getByRole("button", { name: "Assign person to design" }).click();
-  await design.getByLabel("Person").selectOption({ label: personName });
+  await pickPerson(design, personName);
   await expect(design.getByLabel("Start date", { exact: true })).toHaveValue("2026-01-01");
   await expect(design.getByLabel("End date", { exact: true })).toHaveValue("2026-01-31");
   await design.getByRole("button", { name: "Assign", exact: true }).click();
@@ -151,7 +160,7 @@ test("assigning to a phase uses the phase dates and updates its fill", async ({ 
   // Full-time on both overlapping phases exceeds 1.0 FTE; the error stays in the lane.
   const build = page.getByRole("region", { name: "build" });
   await build.getByRole("button", { name: "Assign person to build" }).click();
-  await build.getByLabel("Person").selectOption({ label: personName });
+  await pickPerson(build, personName);
   await build.getByRole("button", { name: "Assign", exact: true }).click();
   await expect(build.getByRole("alert")).toContainText("exceed 1.0 FTE");
 
@@ -188,7 +197,7 @@ test("three people at 40% leave a 3-FTE project incomplete", async ({ page }) =>
   const lane = page.getByRole("region", { name: "Staffing" });
   for (const personName of personNames) {
     await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
-    await lane.getByLabel("Person").selectOption({ label: personName });
+    await pickPerson(lane, personName);
     await lane.getByLabel("Commitment").selectOption("0.4");
     await lane.getByLabel("Start date", { exact: true }).fill("2026-01-01");
     await lane.getByLabel("End date", { exact: true }).fill("2026-01-31");
@@ -206,6 +215,135 @@ test("three people at 40% leave a 3-FTE project incomplete", async ({ page }) =>
   const row = projectRow(page, projectName);
   await expect(row).toContainText("1.2 / 3");
   await expect(row).toContainText("Running");
+});
+
+test("the person picker flags skill and availability fit but lets anyone be assigned", async ({
+  page,
+}) => {
+  const suffix = uniqueSuffix();
+  const projectId = `picker-${suffix}`;
+  const projectName = `Picker Project ${suffix}`;
+  const role = `picker-dev-${suffix}`;
+  const march = { start: "2027-03-01", end: "2027-03-31" };
+  const fullMatch = `Fiona Full ${suffix}`;
+  const halfAway = `Paula Partial ${suffix}`;
+  const away = `Vera Vacation ${suffix}`;
+  const noMatch = `Nate None ${suffix}`;
+  const personRow = (
+    i: number,
+    name: string,
+    seniority: string,
+    years: number,
+    skills: { id: string; level: number }[],
+    vacations: { start: string; end: string }[],
+  ) =>
+    `picker-${i}-${suffix},${name},${role},${seniority},${years},5,,${quote(skills)},${quote(vacations)},[],[],[],{}`;
+  const rows = [
+    personRow(
+      0,
+      fullMatch,
+      "senior",
+      6,
+      [
+        { id: "python", level: 4 },
+        { id: "react", level: 3 },
+      ],
+      [],
+    ),
+    // Off for 16 of March's 31 days: 15/31 ≈ 0.48 FTE free on average.
+    personRow(
+      1,
+      halfAway,
+      "mid",
+      3,
+      [{ id: "python", level: 4 }],
+      [{ start: "2027-03-01", end: "2027-03-16" }],
+    ),
+    personRow(
+      2,
+      away,
+      "lead",
+      9,
+      [
+        { id: "python", level: 5 },
+        { id: "react", level: 4 },
+      ],
+      [march],
+    ),
+    personRow(3, noMatch, "junior", 1, [{ id: "python", level: 1 }], []),
+  ];
+  await page.goto("/people");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "people.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from([PEOPLE_CSV_HEADER, ...rows].join("\n")),
+  });
+  await expect(page.getByText(/Import complete — created 4\./)).toBeVisible();
+
+  const requirements = [
+    { id: "python", min_level: 3, fte: 1 },
+    { id: "react", min_level: 2, fte: 1 },
+  ];
+  const csv = [
+    PROJECT_CSV_HEADER,
+    `${projectId},${projectName},,high,${quote(requirements)},[],[],[],${quote([march])},[]`,
+  ].join("\n");
+  await page.goto("/projects");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "projects.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
+  await page.getByRole("link", { name: projectName }).click();
+  await expect(page.getByRole("heading", { level: 1, name: projectName })).toBeVisible();
+
+  const lane = page.getByRole("region", { name: "Staffing" });
+  await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
+  await lane.getByLabel("Person", { exact: true }).fill(suffix);
+  const options = lane.getByRole("listbox", { name: "People" }).getByRole("option");
+  const option = (name: string) => options.filter({ hasText: name });
+
+  // Skill tier first, then free FTE, then name.
+  await expect(options).toHaveCount(4);
+  await expect(options.nth(0)).toContainText(fullMatch);
+  await expect(options.nth(1)).toContainText(away);
+  await expect(options.nth(2)).toContainText(halfAway);
+  await expect(options.nth(3)).toContainText(noMatch);
+
+  await expect(option(fullMatch)).toContainText(`${role} · Senior · 6 yrs`);
+  await expect(option(fullMatch)).toHaveAttribute("data-tier", "full");
+  await expect(option(fullMatch)).toContainText("python 4");
+  await expect(option(fullMatch)).toContainText("react 3");
+  await expect(option(fullMatch)).toContainText("Available");
+  await expect(option(away)).toHaveAttribute("data-tier", "full");
+  await expect(option(away)).toContainText("Unavailable");
+  await expect(option(halfAway)).toHaveAttribute("data-tier", "partial");
+  await expect(option(halfAway)).toContainText("no react");
+  await expect(option(halfAway)).toContainText("0.48 FTE free");
+  await expect(option(noMatch)).toHaveAttribute("data-tier", "none");
+  await expect(option(noMatch)).toContainText("python 1");
+  await expect(option(noMatch)).toContainText("Available");
+
+  // A lighter commitment re-rates the badges without leaving the form.
+  await lane.getByLabel("Commitment").selectOption("0.4");
+  await lane.getByLabel("Person", { exact: true }).fill(suffix);
+  await expect(option(halfAway)).toContainText("Available");
+  await expect(option(away)).toContainText("Unavailable");
+
+  // Neither a skill mismatch nor a vacation blocks the assignment.
+  await option(noMatch).click();
+  await expect(lane.getByLabel("Person", { exact: true })).toHaveValue(noMatch);
+  await lane.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(lane.getByRole("listitem").filter({ hasText: noMatch })).toContainText("0.4 FTE");
+
+  await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
+  await lane.getByLabel("Person", { exact: true }).fill(suffix);
+  await expect(option(noMatch)).toContainText("Already on this phase");
+  await expect(option(fullMatch)).not.toContainText("Already on this phase");
+  await option(away).click();
+  await lane.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(lane.getByRole("listitem").filter({ hasText: away })).toContainText("1 FTE");
+  await expect(lane).toContainText("1.4 of 2 FTE");
 });
 
 test("an unknown project id shows a not-found state", async ({ page }) => {
@@ -299,7 +437,7 @@ async function seedSortableProjects(page: Page, { staff }: { staff: boolean }): 
       await page.goto(`/projects/${id}-${suffix}`);
       const lane = page.getByRole("region", { name: "Staffing" });
       await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
-      await lane.getByLabel("Person").selectOption({ label: personName });
+      await pickPerson(lane, personName);
       await lane.getByLabel("Start date", { exact: true }).fill(start);
       await lane.getByLabel("End date", { exact: true }).fill(end);
       await lane.getByRole("button", { name: "Assign", exact: true }).click();

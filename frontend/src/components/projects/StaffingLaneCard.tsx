@@ -1,5 +1,5 @@
-import { Check, CircleAlert, CircleCheck, Plus, Sparkles, UserPlus, X } from "lucide-react";
-import { type CSSProperties, useId, useState } from "react";
+import { CircleCheck, Plus, Sparkles, UserPlus, X } from "lucide-react";
+import { type CSSProperties, useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatSpan } from "@/components/common/dates";
 import {
@@ -15,15 +15,17 @@ import {
   selectStyle,
   seniorityLabels,
 } from "@/components/common/ui";
+import { PersonPicker } from "@/components/projects/PersonPicker";
+import { SkillMatch } from "@/components/projects/SkillMatch";
 import {
   assignedFte,
+  averageFreeFte,
   formatFte,
   fteByPerson,
   missingSkills,
   type StaffingLane,
-  skillLevel,
 } from "@/components/projects/staffing";
-import { errorMessage } from "@/services/api";
+import { errorMessage, peopleApi } from "@/services/api";
 import type { Assignment, Person, SkillRequirement } from "@/types";
 
 // Allocations are whole days per week: the backend rejects ratios off the 20% grid.
@@ -354,28 +356,6 @@ export function StaffingLaneCard({
   );
 }
 
-function SkillMatch({ person, requirement }: { person: Person; requirement: SkillRequirement }) {
-  const level = person.skills.find((s) => s.id === requirement.id)?.level;
-  if (skillLevel(person, requirement.id) >= requirement.min_level) {
-    return (
-      <Pill tone="success" icon={Check}>
-        {requirement.id} <span className="mono">{level ?? 0}</span>
-      </Pill>
-    );
-  }
-  return (
-    <Pill tone="warning" icon={CircleAlert}>
-      {level === undefined ? (
-        `no ${requirement.id}`
-      ) : (
-        <>
-          {requirement.id} <span className="mono">{level}</span>
-        </>
-      )}
-    </Pill>
-  );
-}
-
 /** Inline form to assign a person to `lane`; `defaultPersonId` preselects the person. */
 export function AssignForm({
   lane,
@@ -394,6 +374,32 @@ export function AssignForm({
   const [ratio, setRatio] = useState(1);
   const [range, setRange] = useState(() => defaultRange(lane));
   const [saving, setSaving] = useState(false);
+  const [freeFte, setFreeFte] = useState<Map<string, number> | null>(null);
+  const personFieldId = useId();
+  const assignedIds = new Set(lane.assignments.map((a) => a.person_id));
+
+  useEffect(() => {
+    setFreeFte(null);
+    const { start, end } = range;
+    // Date inputs are briefly empty or inverted while the user edits them.
+    if (!start || !end || end < start) return;
+    let current = true;
+    peopleApi
+      .availability(start, end)
+      .then((availability) => {
+        if (!current) return;
+        setFreeFte(
+          new Map(
+            availability.map((a) => [a.person_id, averageFreeFte(a.segments, { start, end })]),
+          ),
+        );
+      })
+      // Availability only annotates the picker, which stays usable without it.
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [range]);
 
   const submit = async () => {
     setSaving(true);
@@ -412,21 +418,32 @@ export function AssignForm({
 
   return (
     <div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 0.75rem" }}>
-        <Field label="Person">
-          <select
-            value={personId}
-            onChange={(e) => setPersonId(e.target.value)}
-            style={selectStyle}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))",
+          gap: "0 0.75rem",
+        }}
+      >
+        {/* Not a Field: its wrapping <label> would forward clicks on the picker's rows to the input. */}
+        <div style={{ gridColumn: "1 / -1", marginBottom: "0.85rem" }}>
+          <label
+            htmlFor={personFieldId}
+            style={{ display: "block", fontSize: "0.82rem", fontWeight: 600, marginBottom: 5 }}
           >
-            <option value="">Select a person</option>
-            {people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+            Person
+          </label>
+          <PersonPicker
+            id={personFieldId}
+            people={people}
+            value={personId}
+            onChange={setPersonId}
+            requirements={lane.skillRequirements}
+            assignedIds={assignedIds}
+            freeFte={freeFte}
+            commitment={ratio}
+          />
+        </div>
         <Field label="Commitment">
           <select
             value={ratio}

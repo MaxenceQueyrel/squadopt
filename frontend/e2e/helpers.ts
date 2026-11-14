@@ -27,6 +27,16 @@ export async function createPerson(page: Page, name: string, roleId: string): Pr
   await page.getByRole("button", { name: "Save" }).click();
 }
 
+/** Picks `name` in the assign form's searchable "Person" picker inside `scope`. */
+export async function pickPerson(scope: Page | Locator, name: string): Promise<void> {
+  await scope.getByLabel("Person", { exact: true }).fill(name);
+  await scope
+    .getByRole("listbox", { name: "People" })
+    .getByRole("option")
+    .filter({ hasText: name })
+    .click();
+}
+
 /** A random-ish suffix so specs never collide on ids across runs/retries. */
 export function uniqueSuffix(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
