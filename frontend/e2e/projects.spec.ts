@@ -311,16 +311,16 @@ test("the person picker flags skill and availability fit but lets anyone be assi
   await expect(options.nth(3)).toContainText(noMatch);
 
   await expect(option(fullMatch)).toContainText(`${role} · Senior · 6 yrs`);
-  await expect(option(fullMatch)).toContainText("Full match");
+  await expect(option(fullMatch)).toHaveAttribute("data-tier", "full");
   await expect(option(fullMatch)).toContainText("python 4");
   await expect(option(fullMatch)).toContainText("react 3");
   await expect(option(fullMatch)).toContainText("Available");
-  await expect(option(away)).toContainText("Full match");
+  await expect(option(away)).toHaveAttribute("data-tier", "full");
   await expect(option(away)).toContainText("Unavailable");
-  await expect(option(halfAway)).toContainText("Partial match");
+  await expect(option(halfAway)).toHaveAttribute("data-tier", "partial");
   await expect(option(halfAway)).toContainText("no react");
   await expect(option(halfAway)).toContainText("0.48 FTE free");
-  await expect(option(noMatch)).toContainText("No match");
+  await expect(option(noMatch)).toHaveAttribute("data-tier", "none");
   await expect(option(noMatch)).toContainText("python 1");
   await expect(option(noMatch)).toContainText("Available");
 

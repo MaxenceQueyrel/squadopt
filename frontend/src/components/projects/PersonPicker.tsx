@@ -1,12 +1,4 @@
-import {
-  CalendarCheck,
-  CalendarClock,
-  CalendarX,
-  CircleAlert,
-  CircleCheck,
-  CircleX,
-  type LucideIcon,
-} from "lucide-react";
+import { CalendarCheck, CalendarClock, CalendarX, type LucideIcon } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useRef, useState } from "react";
 import {
   Avatar,
@@ -21,25 +13,10 @@ import { SkillMatch } from "@/components/projects/SkillMatch";
 import { formatFte, type SkillMatchTier, skillMatchTier } from "@/components/projects/staffing";
 import type { Person, SkillRequirement } from "@/types";
 
-const tiers: Record<
-  SkillMatchTier,
-  { rank: number; label: string; tone: PillTone; icon: LucideIcon; accent: string }
-> = {
-  full: {
-    rank: 0,
-    label: "Full match",
-    tone: "success",
-    icon: CircleCheck,
-    accent: colors.success,
-  },
-  partial: {
-    rank: 1,
-    label: "Partial match",
-    tone: "warning",
-    icon: CircleAlert,
-    accent: colors.warning,
-  },
-  none: { rank: 2, label: "No match", tone: "danger", icon: CircleX, accent: colors.danger },
+const tiers: Record<SkillMatchTier, { rank: number; accent: string }> = {
+  full: { rank: 0, accent: colors.success },
+  partial: { rank: 1, accent: colors.warning },
+  none: { rank: 2, accent: colors.danger },
 };
 
 // Free FTE is a day-weighted average of ratios, so allow for float noise when comparing.
@@ -69,10 +46,10 @@ const listStyle: CSSProperties = {
 
 /** A searchable, keyboard-navigable person picker for staffing a lane.
  *
- * Each row shows the person's profile, their level in each of `requirements`, how well
- * they match those requirements and, once `freeFte` is known, whether they have
- * `commitment` FTE free. Rows are sorted by match tier, then free FTE, then name; nobody is
- * disabled, so a poor fit can still be picked.
+ * Each row shows the person's profile and their level in each of `requirements`, with a
+ * green / amber / red left accent for meeting all, some or none of them, and, once
+ * `freeFte` is known, whether they have `commitment` FTE free. Rows are sorted by match
+ * tier, then free FTE, then name; nobody is disabled, so a poor fit can still be picked.
  */
 export function PersonPicker({
   id,
@@ -200,7 +177,6 @@ export function PersonPicker({
         ) : (
           <div id={listId} role="listbox" aria-label="People" style={listStyle}>
             {matches.map(({ person, tier, free }, i) => {
-              const match = tiers[tier];
               const badge = free === undefined ? null : availabilityBadge(free, commitment);
               const years = person.years_of_experience;
               const details = [
@@ -215,6 +191,7 @@ export function PersonPicker({
                   id={optionId(person.id)}
                   role="option"
                   aria-selected={person.id === value}
+                  data-tier={tier}
                   tabIndex={-1}
                   // The input would blur before click fires and lose the active row.
                   onMouseDown={(e) => e.preventDefault()}
@@ -226,7 +203,7 @@ export function PersonPicker({
                     gap: "0.65rem",
                     padding: "0.55rem 0.65rem",
                     borderRadius: 6,
-                    borderLeft: `3px solid ${match.accent}`,
+                    borderLeft: `3px solid ${tiers[tier].accent}`,
                     background: i === activeIndex ? colors.primaryBg : "transparent",
                     cursor: "pointer",
                     fontSize: "0.875rem",
@@ -257,21 +234,20 @@ export function PersonPicker({
                     <div style={{ fontSize: "0.8rem", color: colors.muted }}>
                       {details.join(" · ")}
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        gap: "0.35rem",
-                        marginTop: "0.35rem",
-                      }}
-                    >
-                      <Pill tone={match.tone} icon={match.icon}>
-                        {match.label}
-                      </Pill>
-                      {requirements.map((req) => (
-                        <SkillMatch key={req.id} person={person} requirement={req} />
-                      ))}
-                    </div>
+                    {requirements.length > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.35rem",
+                          marginTop: "0.35rem",
+                        }}
+                      >
+                        {requirements.map((req) => (
+                          <SkillMatch key={req.id} person={person} requirement={req} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {badge && (
                     <Pill tone={badge.tone} icon={badge.icon}>
