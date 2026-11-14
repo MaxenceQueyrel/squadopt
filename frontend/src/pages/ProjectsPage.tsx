@@ -1,4 +1,13 @@
-import { ChevronRight, Download, Plus, SlidersHorizontal, Upload } from "lucide-react";
+import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Plus,
+  SlidersHorizontal,
+  Upload,
+} from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useShallow } from "zustand/shallow";
@@ -7,17 +16,25 @@ import {
   AvatarStack,
   Button,
   colors,
+  Field,
   FillBar,
+  FilterMenu,
+  IconButton,
+  inputStyle,
   PageHeader,
   Pill,
+  popoverStyle,
   priorityIcons,
   priorityTones,
   SearchInput,
+  selectStyle,
   Tabs,
+  useDismiss,
 } from "@/components/common/ui";
 import { ProjectForm } from "@/components/projects/ProjectForm";
 import {
   buildLanes,
+  type FillStatus,
   fillTones,
   formatFte,
   needsStaffing,
@@ -33,7 +50,7 @@ import { assignmentsApi, projectsApi } from "@/services/api";
 import { downloadBlob } from "@/services/download";
 import { knownSkillIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
-import type { Assignment, DateRange, Project, ProjectsImportSummary } from "@/types";
+import type { Assignment, DateRange, Priority, Project, ProjectsImportSummary } from "@/types";
 
 type StatusFilter = "all" | "needs-staffing" | "running" | "ended";
 
@@ -86,6 +103,146 @@ function matchesStatus(row: ProjectRow, filter: StatusFilter): boolean {
   return row.status === filter;
 }
 
+const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
+
+const PRIORITY_RANK: Record<Priority, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+
+type StaffingFilter = "unstaffed" | "partial" | "full";
+
+const STAFFING_FILTERS: StaffingFilter[] = ["unstaffed", "partial", "full"];
+
+const STAFFING_FILTER_LABELS: Record<StaffingFilter, string> = {
+  unstaffed: "Unstaffed",
+  partial: "Partially staffed",
+  full: "Fully staffed",
+};
+
+// Matches projectFill() so the filter always agrees with the fill-bar colour.
+const STAFFING_FILTER_FILLS: Record<StaffingFilter, FillStatus> = {
+  unstaffed: "empty",
+  partial: "partial",
+  full: "complete",
+};
+
+type SortKey = "priority" | "start" | "end" | "staffing";
+type SortDir = "asc" | "desc";
+
+const SORT_KEYS: SortKey[] = ["priority", "start", "end", "staffing"];
+
+const SORT_KEY_LABELS: Record<SortKey, string> = {
+  priority: "Priority",
+  start: "Start date",
+  end: "End date",
+  staffing: "Staffing",
+};
+
+const DEFAULT_SORT_DIRS: Record<SortKey, SortDir> = {
+  priority: "desc",
+  start: "asc",
+  end: "asc",
+  staffing: "desc",
+};
+
+interface ListView {
+  status: StatusFilter;
+  query: string;
+  priorities: Priority[];
+  staffing: StaffingFilter[];
+  from: string;
+  to: string;
+  sort: SortKey;
+  dir: SortDir;
+}
+
+function parseList<T extends string>(value: string | null, allowed: T[]): T[] {
+  const values = value?.split(",") ?? [];
+  return allowed.filter((option) => values.includes(option));
+}
+
+function parseDate(value: string | null): string {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
+function viewFromParams(params: URLSearchParams): ListView {
+  const sort = SORT_KEYS.find((key) => key === params.get("sort")) ?? "priority";
+  const dir = params.get("dir");
+  return {
+    status: parseStatusFilter(params.get("status")),
+    query: params.get("q") ?? "",
+    priorities: parseList(params.get("priority"), PRIORITIES),
+    staffing: parseList(params.get("staffing"), STAFFING_FILTERS),
+    from: parseDate(params.get("from")),
+    to: parseDate(params.get("to")),
+    sort,
+    dir: dir === "asc" || dir === "desc" ? dir : DEFAULT_SORT_DIRS[sort],
+  };
+}
+
+function viewToParams(view: ListView): URLSearchParams {
+  const params = new URLSearchParams();
+  if (view.status !== "all") params.set("status", view.status);
+  if (view.query) params.set("q", view.query);
+  if (view.priorities.length > 0) params.set("priority", view.priorities.join(","));
+  if (view.staffing.length > 0) params.set("staffing", view.staffing.join(","));
+  if (view.from) params.set("from", view.from);
+  if (view.to) params.set("to", view.to);
+  if (view.sort !== "priority") params.set("sort", view.sort);
+  if (view.dir !== DEFAULT_SORT_DIRS[view.sort]) params.set("dir", view.dir);
+  return params;
+}
+
+function matchesView(row: ProjectRow, view: ListView): boolean {
+  const needle = view.query.trim().toLowerCase();
+  if (
+    !row.project.name.toLowerCase().includes(needle) &&
+    !row.project.description.toLowerCase().includes(needle)
+  )
+    return false;
+  if (!matchesStatus(row, view.status)) return false;
+  if (view.priorities.length > 0 && !view.priorities.includes(row.project.priority)) return false;
+  if (
+    view.staffing.length > 0 &&
+    !view.staffing.some(
+      (filter) => STAFFING_FILTER_FILLS[filter] === projectFill(row.staffed, row.total),
+    )
+  )
+    return false;
+  if (view.from || view.to) {
+    if (!row.span) return false;
+    if (view.to && row.span.start > view.to) return false;
+    if (view.from && row.span.end < view.from) return false;
+  }
+  return true;
+}
+
+type SortValue = string | number | null;
+
+function sortValue(row: ProjectRow, key: SortKey): SortValue {
+  if (key === "priority") return PRIORITY_RANK[row.project.priority];
+  if (key === "start") return row.span?.start ?? null;
+  if (key === "end") return row.span?.end ?? null;
+  return row.total > 0 ? row.staffed / row.total : null;
+}
+
+// A null value (unscheduled, or no FTE requested) sorts last whatever the direction.
+function compareValues(a: SortValue, b: SortValue, dir: SortDir): number {
+  if (a === null || b === null) return Number(a === null) - Number(b === null);
+  const order = a < b ? -1 : a > b ? 1 : 0;
+  return dir === "asc" ? order : -order;
+}
+
+function compareRows(a: ProjectRow, b: ProjectRow, sort: SortKey, dir: SortDir): number {
+  const tieBreak =
+    sort === "priority"
+      ? compareValues(sortValue(a, "start"), sortValue(b, "start"), "asc")
+      : compareValues(sortValue(a, "priority"), sortValue(b, "priority"), "desc");
+  return (
+    compareValues(sortValue(a, sort), sortValue(b, sort), dir) ||
+    tieBreak ||
+    a.project.name.localeCompare(b.project.name)
+  );
+}
+
 const relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
 function relativeDays(days: number): string {
@@ -119,10 +276,8 @@ export default function ProjectsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   // Local state mirrored to the URL: binding the search input to the URL directly drops
   // keystrokes, since react-router applies location changes in a transition.
-  const [statusFilter, setStatusFilter] = useState(() =>
-    parseStatusFilter(searchParams.get("status")),
-  );
-  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
+  const [view, setView] = useState(() => viewFromParams(searchParams));
+  const update = (changes: Partial<ListView>) => setView((v) => ({ ...v, ...changes }));
   const [editing, setEditing] = useState<Project | "new" | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [importSummary, setImportSummary] = useState<ProjectsImportSummary | null>(null);
@@ -135,11 +290,8 @@ export default function ProjectsPage() {
   const today = isoToday();
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (statusFilter !== "all") params.set("status", statusFilter);
-    if (query) params.set("q", query);
-    setSearchParams(params, { replace: true });
-  }, [statusFilter, query, setSearchParams]);
+    setSearchParams(viewToParams(view), { replace: true });
+  }, [view, setSearchParams]);
 
   useEffect(() => {
     fetchProjects();
@@ -170,13 +322,9 @@ export default function ProjectsPage() {
     });
   }, [projects, assignments, people, today]);
 
-  const needle = query.trim().toLowerCase();
-  const visibleRows = rows.filter(
-    (row) =>
-      matchesStatus(row, statusFilter) &&
-      (row.project.name.toLowerCase().includes(needle) ||
-        row.project.description.toLowerCase().includes(needle)),
-  );
+  const visibleRows = rows
+    .filter((row) => matchesView(row, view))
+    .sort((a, b) => compareRows(a, b, view.sort, view.dir));
   const requested = rows.reduce((sum, row) => sum + row.total, 0);
   const staffed = rows.reduce((sum, row) => sum + row.staffed, 0);
 
@@ -284,14 +432,14 @@ export default function ProjectsPage() {
           alignItems: "center",
           gap: "1rem",
           flexWrap: "wrap",
-          marginBottom: "1.25rem",
+          marginBottom: "0.75rem",
         }}
       >
         <Tabs
           variant="segmented"
           ariaLabel="Filter projects by status"
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(parseStatusFilter(value))}
+          value={view.status}
+          onChange={(value) => update({ status: parseStatusFilter(value) })}
           items={STATUS_FILTERS.map((filter) => ({
             value: filter,
             label: STATUS_FILTER_LABELS[filter],
@@ -299,11 +447,71 @@ export default function ProjectsPage() {
           }))}
         />
         <SearchInput
-          value={query}
-          onChange={setQuery}
+          value={view.query}
+          onChange={(query) => update({ query })}
           placeholder="Search projects"
           style={{ width: "100%", maxWidth: "22rem" }}
         />
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "0.6rem",
+          flexWrap: "wrap",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+          <FilterMenu
+            label="Priority"
+            options={PRIORITIES.map((p) => ({ value: p, label: p[0].toUpperCase() + p.slice(1) }))}
+            selected={view.priorities}
+            onChange={(selected) => update({ priorities: selected as Priority[] })}
+          />
+          <FilterMenu
+            label="Staffing"
+            options={STAFFING_FILTERS.map((s) => ({ value: s, label: STAFFING_FILTER_LABELS[s] }))}
+            selected={view.staffing}
+            onChange={(selected) => update({ staffing: selected as StaffingFilter[] })}
+          />
+          <DateRangeFilter
+            from={view.from}
+            to={view.to}
+            onChange={(from, to) => update({ from, to })}
+          />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <label
+            htmlFor="projects-sort"
+            style={{ fontSize: "0.85rem", color: colors.muted, whiteSpace: "nowrap" }}
+          >
+            Sort by
+          </label>
+          <select
+            id="projects-sort"
+            value={view.sort}
+            onChange={(e) => {
+              const sort = SORT_KEYS.find((key) => key === e.target.value) ?? "priority";
+              update({ sort, dir: DEFAULT_SORT_DIRS[sort] });
+            }}
+            style={{ ...selectStyle, width: "auto" }}
+          >
+            {SORT_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {SORT_KEY_LABELS[key]}
+              </option>
+            ))}
+          </select>
+          <IconButton
+            variant="secondary"
+            icon={view.dir === "asc" ? ArrowUpNarrowWide : ArrowDownWideNarrow}
+            ariaLabel={view.dir === "asc" ? "Sort ascending" : "Sort descending"}
+            onClick={() => update({ dir: view.dir === "asc" ? "desc" : "asc" })}
+          />
+        </div>
       </div>
 
       {isLoading && projects.length === 0 ? (
@@ -367,6 +575,81 @@ export default function ProjectsPage() {
             setEditing(null);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+function DateRangeFilter({
+  from,
+  to,
+  onChange,
+}: {
+  from: string;
+  to: string;
+  onChange: (from: string, to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(ref, open, () => setOpen(false));
+  const boundCount = Number(Boolean(from)) + Number(Boolean(to));
+
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        type="button"
+        className="btn btn-secondary btn-md"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        Dates
+        {boundCount > 0 && (
+          <span className="mono" style={{ color: colors.primary, fontSize: "0.8rem" }}>
+            {boundCount}
+          </span>
+        )}
+        <ChevronDown size={15} aria-hidden />
+      </button>
+      {open && (
+        <fieldset style={{ ...popoverStyle, left: 0, margin: 0, padding: "0.75rem" }}>
+          <legend style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>
+            Dates
+          </legend>
+          <div style={{ fontSize: "0.8rem", color: colors.muted, marginBottom: "0.6rem" }}>
+            Projects running at some point in this range
+          </div>
+          <Field label="From">
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => onChange(e.target.value, to)}
+              style={inputStyle}
+            />
+          </Field>
+          <Field label="To" style={{ marginBottom: 0 }}>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => onChange(from, e.target.value)}
+              style={inputStyle}
+            />
+          </Field>
+          {boundCount > 0 && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => onChange("", "")}
+              style={{
+                color: colors.muted,
+                borderTop: `1px solid ${colors.border}`,
+                borderRadius: 0,
+                marginTop: "0.6rem",
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </fieldset>
       )}
     </div>
   );

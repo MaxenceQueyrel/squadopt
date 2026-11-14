@@ -250,3 +250,304 @@ test("importing a CSV adds new projects and reports the result", async ({ page }
   await expect(page.getByText(/Import complete — created 1\./)).toBeVisible();
   await expect(page.getByRole("heading", { name })).toBeVisible();
 });
+
+// Seven projects covering every sort key and filter bucket, searchable by `suffix`
+// (`staffed` only when `staff` is set):
+//   name     priority  span                     FTE  staffed
+//   Alpha    medium    2027-02-01 → 2027-02-28  1    1 (100%)
+//   Bravo    critical  2027-03-01 → 2027-06-30  2    1 (50%)
+//   Charlie  critical  2027-01-01 → 2027-12-31  1    0
+//   Delta    low       unscheduled              1    0
+//   Echo     high      2026-12-01 → 2027-01-15  1    0
+//   Foxtrot  low       2027-01-01 → 2027-01-31  1    0
+//   Golf     low       unscheduled              1    0
+async function seedSortableProjects(page: Page, { staff }: { staff: boolean }): Promise<string> {
+  const suffix = uniqueSuffix();
+  const needs = (fte: number) => quote([{ id: "general", min_level: 0, fte }]);
+  const dates = (start: string, end: string) => quote([{ start, end }]);
+  const projects = [
+    ["alpha", "Alpha", "medium", needs(1), dates("2027-02-01", "2027-02-28")],
+    ["bravo", "Bravo", "critical", needs(2), dates("2027-03-01", "2027-06-30")],
+    ["charlie", "Charlie", "critical", needs(1), dates("2027-01-01", "2027-12-31")],
+    ["delta", "Delta", "low", needs(1), "[]"],
+    ["echo", "Echo", "high", needs(1), dates("2026-12-01", "2027-01-15")],
+    ["foxtrot", "Foxtrot", "low", needs(1), dates("2027-01-01", "2027-01-31")],
+    ["golf", "Golf", "low", needs(1), "[]"],
+  ];
+  const csv = [
+    PROJECT_CSV_HEADER,
+    ...projects.map(
+      ([id, name, priority, requirements, dateRanges]) =>
+        `${id}-${suffix},${name} ${suffix},,${priority},${requirements},[],[],[],${dateRanges},[]`,
+    ),
+  ].join("\n");
+  await page.goto("/projects");
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "projects.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
+  await expect(page.getByText(/Import complete — created 7\./)).toBeVisible();
+
+  if (staff) {
+    const personName = `Dorothy Vaughan ${suffix}`;
+    await createPerson(page, personName, `sortable-${suffix}`);
+    for (const [id, start, end, fill] of [
+      ["alpha", "2027-02-01", "2027-02-28", "1 of 1 FTE"],
+      ["bravo", "2027-03-01", "2027-03-31", "1 of 2 FTE"],
+    ]) {
+      await page.goto(`/projects/${id}-${suffix}`);
+      const lane = page.getByRole("region", { name: "Staffing" });
+      await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
+      await lane.getByLabel("Person").selectOption({ label: personName });
+      await lane.getByLabel("Start date", { exact: true }).fill(start);
+      await lane.getByLabel("End date", { exact: true }).fill(end);
+      await lane.getByRole("button", { name: "Assign", exact: true }).click();
+      await expect(lane).toContainText(fill);
+    }
+  }
+  return suffix;
+}
+
+async function expectOrder(page: Page, suffix: string, names: string[]): Promise<void> {
+  await expect(page.getByRole("listitem").getByRole("heading", { level: 3 })).toHaveText(
+    names.map((name) => `${name} ${suffix}`),
+  );
+}
+
+async function pickFilters(page: Page, menu: string, options: string[]): Promise<void> {
+  await page.getByRole("button", { name: new RegExp(`^${menu}`) }).click();
+  for (const option of options) {
+    await page.getByRole("checkbox", { name: option, exact: true }).click();
+  }
+  await page.keyboard.press("Escape");
+}
+
+async function setDateRange(page: Page, from: string, to: string): Promise<void> {
+  await page.getByRole("button", { name: /^Dates/ }).click();
+  await page.getByLabel("From", { exact: true }).fill(from);
+  await page.getByLabel("To", { exact: true }).fill(to);
+  await page.keyboard.press("Escape");
+}
+
+test("the project list sorts by priority, dates and staffing in both directions", async ({
+  page,
+}) => {
+  const suffix = await seedSortableProjects(page, { staff: true });
+  await page.goto(`/projects?q=${suffix}`);
+  const sortBy = page.getByLabel("Sort by");
+
+  // Priority, highest first; ties by soonest start (unscheduled last), then by name.
+  await expect(sortBy).toHaveValue("priority");
+  await expectOrder(page, suffix, [
+    "Charlie",
+    "Bravo",
+    "Echo",
+    "Alpha",
+    "Foxtrot",
+    "Delta",
+    "Golf",
+  ]);
+  await page.getByRole("button", { name: "Sort descending" }).click();
+  await expectOrder(page, suffix, [
+    "Foxtrot",
+    "Delta",
+    "Golf",
+    "Alpha",
+    "Echo",
+    "Charlie",
+    "Bravo",
+  ]);
+
+  // Switching key resets the direction to the key's own default: soonest first.
+  await sortBy.selectOption("start");
+  await expect(page.getByRole("button", { name: "Sort ascending" })).toBeVisible();
+  await expectOrder(page, suffix, [
+    "Echo",
+    "Charlie",
+    "Foxtrot",
+    "Alpha",
+    "Bravo",
+    "Delta",
+    "Golf",
+  ]);
+  await page.getByRole("button", { name: "Sort ascending" }).click();
+  await expectOrder(page, suffix, [
+    "Bravo",
+    "Alpha",
+    "Charlie",
+    "Foxtrot",
+    "Echo",
+    "Delta",
+    "Golf",
+  ]);
+
+  await sortBy.selectOption("end");
+  await expectOrder(page, suffix, [
+    "Echo",
+    "Foxtrot",
+    "Alpha",
+    "Bravo",
+    "Charlie",
+    "Delta",
+    "Golf",
+  ]);
+  await page.getByRole("button", { name: "Sort ascending" }).click();
+  await expectOrder(page, suffix, [
+    "Charlie",
+    "Bravo",
+    "Alpha",
+    "Foxtrot",
+    "Echo",
+    "Delta",
+    "Golf",
+  ]);
+
+  // Fullest first; equally staffed projects by highest priority, then name, both ways.
+  await sortBy.selectOption("staffing");
+  await expect(page.getByRole("button", { name: "Sort descending" })).toBeVisible();
+  await expectOrder(page, suffix, [
+    "Alpha",
+    "Bravo",
+    "Charlie",
+    "Echo",
+    "Delta",
+    "Foxtrot",
+    "Golf",
+  ]);
+  await page.getByRole("button", { name: "Sort descending" }).click();
+  await expectOrder(page, suffix, [
+    "Charlie",
+    "Echo",
+    "Delta",
+    "Foxtrot",
+    "Golf",
+    "Bravo",
+    "Alpha",
+  ]);
+});
+
+test("a project requesting no FTE stays last on the staffing sort", async ({ page }) => {
+  const suffix = await seedSortableProjects(page, { staff: false });
+  // The API rejects projects without skill requirements, so only legacy data has 0 FTE.
+  await page.route("**/api/v1/projects/", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const projects = await response.json();
+    projects.push({
+      ...projects[0],
+      id: `hotel-${suffix}`,
+      name: `Hotel ${suffix}`,
+      description: "",
+      priority: "critical",
+      skill_requirements: [],
+      phases: [],
+      date_ranges: [{ start: "2026-12-01", end: "2026-12-31" }],
+      completed_at: null,
+      start_window: null,
+    });
+    await route.fulfill({ response, json: projects });
+  });
+  await page.goto(`/projects?q=${suffix}&sort=staffing`);
+
+  // All other projects are at 0%, so they keep the same tie-break order both ways.
+  const unstaffed = ["Bravo", "Charlie", "Echo", "Alpha", "Delta", "Foxtrot", "Golf"];
+  await expectOrder(page, suffix, [...unstaffed, "Hotel"]);
+  await page.getByRole("button", { name: "Sort descending" }).click();
+  await expectOrder(page, suffix, [...unstaffed, "Hotel"]);
+
+  // Its fill bar reads as full, and so does the staffing filter.
+  await pickFilters(page, "Staffing", ["Fully staffed"]);
+  await expectOrder(page, suffix, ["Hotel"]);
+});
+
+test("the project list filters by priority, staffing and dates", async ({ page }) => {
+  const suffix = await seedSortableProjects(page, { staff: true });
+  await page.goto(`/projects?q=${suffix}`);
+
+  await pickFilters(page, "Priority", ["Critical", "High"]);
+  await expectOrder(page, suffix, ["Charlie", "Bravo", "Echo"]);
+  await pickFilters(page, "Priority", ["Critical", "High"]);
+
+  await pickFilters(page, "Staffing", ["Unstaffed"]);
+  await expectOrder(page, suffix, ["Charlie", "Echo", "Foxtrot", "Delta", "Golf"]);
+  await pickFilters(page, "Staffing", ["Unstaffed", "Fully staffed"]);
+  await expectOrder(page, suffix, ["Alpha"]);
+  await pickFilters(page, "Staffing", ["Fully staffed", "Partially staffed"]);
+  await expectOrder(page, suffix, ["Bravo"]);
+  await pickFilters(page, "Staffing", ["Partially staffed"]);
+
+  // Only a "To" bound: projects starting on or before it; unscheduled ones are hidden.
+  await setDateRange(page, "", "2027-01-10");
+  await expectOrder(page, suffix, ["Charlie", "Echo", "Foxtrot"]);
+  // Only a "From" bound: projects ending on or after it.
+  await setDateRange(page, "2027-03-01", "");
+  await expectOrder(page, suffix, ["Charlie", "Bravo"]);
+  // Both bounds: projects active at some point in the window.
+  await setDateRange(page, "2027-02-10", "2027-02-20");
+  await expectOrder(page, suffix, ["Charlie", "Alpha"]);
+  await page.getByRole("button", { name: /^Dates/ }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expectOrder(page, suffix, [
+    "Charlie",
+    "Bravo",
+    "Echo",
+    "Alpha",
+    "Foxtrot",
+    "Delta",
+    "Golf",
+  ]);
+
+  // Filters combine with each other, the status tab and the search.
+  await pickFilters(page, "Priority", ["Low"]);
+  await pickFilters(page, "Staffing", ["Unstaffed"]);
+  await setDateRange(page, "", "2027-06-30");
+  await expectOrder(page, suffix, ["Foxtrot"]);
+  await page.getByRole("button", { name: /^Dates/ }).click();
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expectOrder(page, suffix, ["Foxtrot", "Delta", "Golf"]);
+  await page.getByPlaceholder("Search projects").fill(`Golf ${suffix}`);
+  await expectOrder(page, suffix, ["Golf"]);
+
+  await page.goto(`/projects?q=${suffix}&priority=critical,medium`);
+  await page.getByRole("tab", { name: /^Running/ }).click();
+  await expectOrder(page, suffix, ["Bravo", "Alpha"]);
+});
+
+test("project list filters and sort survive a reload", async ({ page }) => {
+  const suffix = await seedSortableProjects(page, { staff: false });
+  await page.goto(`/projects?q=${suffix}`);
+
+  await pickFilters(page, "Priority", ["Low", "Critical"]);
+  await setDateRange(page, "2027-01-01", "");
+  await page.getByLabel("Sort by").selectOption("end");
+  await page.getByRole("button", { name: "Sort ascending" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`\\?q=${suffix}&priority=low%2Ccritical&from=2027-01-01&sort=end&dir=desc$`),
+  );
+
+  await page.reload();
+  await expect(page.getByLabel("Sort by")).toHaveValue("end");
+  await expect(page.getByRole("button", { name: "Sort descending" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Priority/ })).toHaveText(/^Priority\s*2/);
+  await expectOrder(page, suffix, ["Charlie", "Bravo", "Foxtrot"]);
+
+  // Invalid values fall back to the defaults: every project, highest priority first.
+  await page.goto(
+    `/projects?q=${suffix}&priority=urgent&staffing=some&from=soon&to=2027-13&sort=name&dir=up`,
+  );
+  await expect(page.getByLabel("Sort by")).toHaveValue("priority");
+  await expect(page.getByRole("button", { name: "Sort descending" })).toBeVisible();
+  await expectOrder(page, suffix, [
+    "Charlie",
+    "Bravo",
+    "Echo",
+    "Alpha",
+    "Foxtrot",
+    "Delta",
+    "Golf",
+  ]);
+  await expect(page).toHaveURL(new RegExp(`\\?q=${suffix}$`));
+});
