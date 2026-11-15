@@ -51,7 +51,7 @@ squadopt/
   * `domain/solver.py` defines `AssignmentSolverPort`, the interface that all external consumers depend on.
   * `adapters/pulp_solver.py` provides `PuLPTeamAssignmentSolver`, which translates domain inputs into standard MILP formulations.
 * **Optimization Formulation:**
-  * Multi-objective weights reward performance (skill coverage), candidate growth (personal learning targets matching project needs), and cost control (favoring adequately-qualified over highly-experienced, expensive staff).
+  * Multi-objective weights reward performance (skill coverage), candidate growth (personal learning targets matching project needs), and cost control (favoring adequately-qualified over more senior, expensive staff).
   * Pairwise Chemistry/Affinity rewards selection of compatible pairs. This quadratic formulation is linearized via auxiliary binary variables $z_{ij}$ with three linear inequality bounds.
   * Phased projects can be solved independently, or jointly with a handover retention bonus across consecutive phases via retention variables $y_{it}$.
 * **Availability Management:** Effective availability represents day-weighted average FTE capacity across project calendars.

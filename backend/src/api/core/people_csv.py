@@ -20,7 +20,6 @@ FIELDNAMES = (
     "name",
     "role",
     "seniority",
-    "years_of_experience",
     "working_days_per_week",
     "manager_id",
     *_JSON_FIELDS,

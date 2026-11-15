@@ -14,7 +14,7 @@ const PROJECT_CSV_HEADER =
   "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,squads,date_ranges,phases";
 
 const PEOPLE_CSV_HEADER =
-  "id,name,role,seniority,years_of_experience,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
+  "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
 
 const quote = (value: unknown) => `"${JSON.stringify(value).replace(/"/g, '""')}"`;
 
@@ -30,7 +30,7 @@ async function importPeople(
 ): Promise<void> {
   const rows = people.map(
     ({ id, name, skills = [], vacations = [] }) =>
-      `${id},${name},${id},mid,3,5,,${quote(skills)},${quote(vacations)},[],[],[],{}`,
+      `${id},${name},${id},mid,5,,${quote(skills)},${quote(vacations)},[],[],[],{}`,
   );
   await page.goto("/people");
   await page.locator('input[type="file"]').setInputFiles({

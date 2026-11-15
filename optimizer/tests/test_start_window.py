@@ -27,14 +27,15 @@ def solver():
     return PuLPTeamAssignmentSolver()
 
 
-def _person(person_id, python_level=4.0, years=5.0, react_level=None, vacations=None, assignments=None):
+def _person(
+    person_id, python_level=4.0, seniority=Seniority.SENIOR, react_level=None, vacations=None, assignments=None
+):
     skills = [SkillLevel(id="python", level=python_level)]
     if react_level is not None:
         skills.append(SkillLevel(id="react", level=react_level))
     return PersonInput(
         id=person_id,
-        seniority=Seniority.SENIOR,
-        years_of_experience=years,
+        seniority=seniority,
         skills=skills,
         vacations=vacations or [],
         assignments=assignments or [],
@@ -133,12 +134,12 @@ def test_scan_waits_for_the_key_person(solver, blocked):
 
 
 def test_fully_covered_start_beats_a_higher_scoring_partial_one(solver):
-    # "fresh" scores higher (no experience cost) but can't fill react; "veteran" covers
+    # "fresh" scores higher (junior, so cheapest) but can't fill react; "veteran" covers
     # both skills at a lower score. Each is away during the other's week.
     weights = AssignmentWeights(performance=0.5, chemistry=0.0, growth=0.0, cost=0.5)
     people = [
-        _person("fresh", python_level=5.0, react_level=2.9, years=0.0, vacations=[WEEK_2]),
-        _person("veteran", python_level=4.0, react_level=3.0, years=20.0, vacations=[WEEK_1]),
+        _person("fresh", python_level=5.0, react_level=2.9, seniority=Seniority.JUNIOR, vacations=[WEEK_2]),
+        _person("veteran", python_level=4.0, react_level=3.0, seniority=Seniority.LEAD, vacations=[WEEK_1]),
     ]
     project = _project(
         skill_requirements=[

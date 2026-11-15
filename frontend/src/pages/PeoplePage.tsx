@@ -207,7 +207,6 @@ export default function PeoplePage() {
               <tr>
                 <th style={headerCell}>Person</th>
                 <th style={headerCell}>Seniority</th>
-                <th style={headerCell}>Experience</th>
                 <th style={headerCell}>FTE</th>
                 <th style={headerCell}>Free next {FREE_HORIZON_DAYS} days</th>
                 <th style={headerCell}>Skills</th>
@@ -217,7 +216,7 @@ export default function PeoplePage() {
             <tbody>
               {filteredPeople.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ ...bodyCell, color: colors.muted, textAlign: "center" }}>
+                  <td colSpan={6} style={{ ...bodyCell, color: colors.muted, textAlign: "center" }}>
                     No one matches these filters.{" "}
                     <Button variant="ghost" size="sm" onClick={() => setFilters(NO_FILTERS)}>
                       Clear filters
@@ -246,9 +245,6 @@ export default function PeoplePage() {
                     </td>
                     <td style={bodyCell}>
                       <Pill tone={seniorityTones[p.seniority]}>{seniorityLabels[p.seniority]}</Pill>
-                    </td>
-                    <td style={{ ...bodyCell, whiteSpace: "nowrap" }} className="mono">
-                      {p.years_of_experience} yrs
                     </td>
                     <td style={bodyCell} className="mono">
                       {formatFte(p.base_capacity)}

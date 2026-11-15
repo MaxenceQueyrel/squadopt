@@ -13,7 +13,6 @@ class PersonBase(BaseModel):
     name: str
     role: str
     seniority: Seniority
-    years_of_experience: float = Field(ge=0)
     working_days_per_week: int = Field(default=5, ge=1, le=7)
     manager_id: str | None = (
         None  # Person.id of this person's manager (org reporting line)
@@ -41,7 +40,6 @@ class Person(PersonBase):
         return PersonInput(
             id=self.id,
             seniority=self.seniority,
-            years_of_experience=self.years_of_experience,
             working_days_per_week=self.working_days_per_week,
             skills=self.skills,
             vacations=self.vacations,

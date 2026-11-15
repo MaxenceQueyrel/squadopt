@@ -34,7 +34,6 @@ def _create_person(client, headers, **overrides):
         "name": "Alice Martin",
         "role": "Backend Developer",
         "seniority": Seniority.SENIOR,
-        "years_of_experience": 8.0,
         "working_days_per_week": 5,
         **overrides,
     }
@@ -57,7 +56,6 @@ _CSV_FIELDNAMES = (
     "name",
     "role",
     "seniority",
-    "years_of_experience",
     "working_days_per_week",
     "manager_id",
     "skills",
@@ -75,7 +73,6 @@ def _row_values(**overrides):
         "name": "Bob Nguyen",
         "role": "Frontend Developer",
         "seniority": "mid",
-        "years_of_experience": "4.0",
         "working_days_per_week": "5",
         "manager_id": "",
         "skills": "[]",
@@ -120,7 +117,26 @@ def test_import_creates_new_people(client, org_headers):
     person = client.get("/api/v1/people/p1", headers=org_headers).json()
     assert person["name"] == "Bob Nguyen"
     assert person["seniority"] == "mid"
-    assert person["years_of_experience"] == 4.0
+
+
+def test_import_ignores_a_legacy_years_of_experience_column(client, org_headers):
+    _ensure_role(client, org_headers, "Frontend Developer")
+    csv_text = f"{','.join(_CSV_FIELDNAMES)},years_of_experience\n{_row_values()},4.0\n"
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    assert response.json()["created"] == ["p1"]
+    person = client.get("/api/v1/people/p1", headers=org_headers).json()
+    assert "years_of_experience" not in person
+
+
+def test_export_omits_years_of_experience(client, org_headers):
+    _create_person(client, org_headers)
+
+    export_response = client.get("/api/v1/people/export", headers=org_headers)
+
+    assert "years_of_experience" not in export_response.text.splitlines()[0]
 
 
 def test_import_skips_existing_ids(client, org_headers):

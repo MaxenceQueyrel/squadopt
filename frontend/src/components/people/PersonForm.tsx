@@ -18,7 +18,6 @@ function emptyDraft(): PersonDraft {
     name: "",
     role: "",
     seniority: "mid",
-    years_of_experience: 0,
     working_days_per_week: 5,
     skills: [],
     vacations: [],
@@ -125,16 +124,6 @@ export function PersonForm({
               </option>
             ))}
           </select>
-        </Field>
-        <Field label="Years of experience">
-          <input
-            type="number"
-            min={0}
-            step={0.5}
-            value={draft.years_of_experience}
-            onChange={(e) => set("years_of_experience", parseFloat(e.target.value) || 0)}
-            style={inputStyle}
-          />
         </Field>
       </div>
 

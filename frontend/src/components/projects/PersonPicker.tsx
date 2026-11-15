@@ -178,12 +178,7 @@ export function PersonPicker({
           <div id={listId} role="listbox" aria-label="People" style={listStyle}>
             {matches.map(({ person, tier, free }, i) => {
               const badge = free === undefined ? null : availabilityBadge(free, commitment);
-              const years = person.years_of_experience;
-              const details = [
-                person.role,
-                seniorityLabels[person.seniority],
-                `${years} ${years === 1 ? "yr" : "yrs"}`,
-              ].filter(Boolean);
+              const details = [person.role, seniorityLabels[person.seniority]].filter(Boolean);
               return (
                 // biome-ignore lint/a11y/useKeyWithClickEvents: the combobox input owns the keyboard (aria-activedescendant)
                 <div

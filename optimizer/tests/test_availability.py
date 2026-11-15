@@ -11,7 +11,6 @@ def _person(working_days_per_week=5, availability_windows=None, vacations=None):
     return PersonInput(
         id="p1",
         seniority=Seniority.SENIOR,
-        years_of_experience=5.0,
         working_days_per_week=working_days_per_week,
         availability_windows=availability_windows or [],
         vacations=vacations or [],
@@ -28,7 +27,7 @@ def test_base_ratio_derives_from_working_days_capped_at_full_time(days, ratio):
 
 
 def test_working_days_per_week_defaults_to_full_week():
-    assert PersonInput(id="p1", seniority=Seniority.SENIOR, years_of_experience=5.0).working_days_per_week == 5
+    assert PersonInput(id="p1", seniority=Seniority.SENIOR).working_days_per_week == 5
 
 
 @pytest.mark.parametrize("days", [0, 8])

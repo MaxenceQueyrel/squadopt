@@ -52,9 +52,7 @@ def test_fte_off_the_grid_or_out_of_range_is_rejected(fte):
 def test_feasible_people_drops_anyone_below_one_step():
     def person(person_id, ratio):
         window = AvailabilityWindow(start=SPAN.start, end=SPAN.end, ratio=ratio)
-        return PersonInput(
-            id=person_id, seniority=Seniority.SENIOR, years_of_experience=5, availability_windows=[window]
-        )
+        return PersonInput(id=person_id, seniority=Seniority.SENIOR, availability_windows=[window])
 
     project = ProjectInput(id="proj", date_ranges=[SPAN])
     people = [person("tiny", 0.15), person("one_day", 0.2), person("part", 0.55)]

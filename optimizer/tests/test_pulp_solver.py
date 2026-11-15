@@ -40,7 +40,6 @@ def people():
         PersonInput(
             id="p1",
             seniority=Seniority.SENIOR,
-            years_of_experience=8.0,
             skills=[SkillLevel(id="python", level=5)],
             growth_targets=[],
             affinities={"p2": 4.0},
@@ -48,7 +47,6 @@ def people():
         PersonInput(
             id="p2",
             seniority=Seniority.JUNIOR,
-            years_of_experience=1.0,
             skills=[SkillLevel(id="python", level=3), SkillLevel(id="react", level=3)],
             growth_targets=["python"],
             affinities={"p1": 4.0},
@@ -231,13 +229,11 @@ def test_handover_keeps_same_person_across_phases(solver):
         PersonInput(
             id="a",
             seniority=Seniority.SENIOR,
-            years_of_experience=8.0,
             skills=[SkillLevel(id="python", level=5), SkillLevel(id="react", level=3)],
         ),
         PersonInput(
             id="b",
             seniority=Seniority.SENIOR,
-            years_of_experience=8.0,
             skills=[SkillLevel(id="python", level=3), SkillLevel(id="react", level=5)],
         ),
     ]
@@ -261,7 +257,7 @@ def test_squad_pulls_in_partner(solver):
     # forces the pair to move together.
     def person(person_id, ds_level):
         skills = [SkillLevel(id="ds", level=ds_level)]
-        return PersonInput(id=person_id, seniority=Seniority.SENIOR, years_of_experience=5, skills=skills)
+        return PersonInput(id=person_id, seniority=Seniority.SENIOR, skills=skills)
 
     candidates = [person("ds_a", 5.0), person("ds_b", 4.5), person("dev", 3.0)]
     base = ProjectInput(
@@ -282,7 +278,7 @@ def test_squad_pulls_in_partner(solver):
 
 def _generalists(*ids):
     # min_level 0 requirements accept them although they list no skill.
-    return [PersonInput(id=person_id, seniority=Seniority.SENIOR, years_of_experience=5) for person_id in ids]
+    return [PersonInput(id=person_id, seniority=Seniority.SENIOR) for person_id in ids]
 
 
 def test_squad_seated_together_when_max_people_allows(solver):
@@ -339,7 +335,6 @@ def pythonistas():
         PersonInput(
             id=f"py{level}",
             seniority=Seniority.SENIOR,
-            years_of_experience=5,
             skills=[SkillLevel(id="python", level=level)],
         )
         for level in (5.0, 4.5, 4.0, 3.5, 3.0, 2.5)
@@ -461,7 +456,6 @@ def _person(person_id, availability=1.0, python_level=4.0, react_level=None):
     return PersonInput(
         id=person_id,
         seniority=Seniority.SENIOR,
-        years_of_experience=5,
         availability_windows=[AvailabilityWindow(start=SPAN.start, end=SPAN.end, ratio=availability)],
         skills=skills,
     )
@@ -499,7 +493,6 @@ def test_chemistry_does_not_reward_adding_people(solver):
         PersonInput(
             id=person_id,
             seniority=Seniority.SENIOR,
-            years_of_experience=5,
             availability_windows=[
                 AvailabilityWindow(start=SPAN.start, end=SPAN.end, ratio=1.0 if person_id in ("a", "b") else 0.4)
             ],

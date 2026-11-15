@@ -163,7 +163,6 @@ export default function PersonDetailPage() {
     projects.find((p) => p.id === projectId)?.name ?? projectId;
   const activeProjects = new Set(current.filter((a) => a.start <= today).map((a) => a.project_id));
   const lastProject = [...past].sort((a, b) => b.end.localeCompare(a.end))[0];
-  const years = person.years_of_experience;
   const closeDialog = () => setDialog(null);
   const refreshPerson = async () => setPerson(await peopleApi.get(person.id));
 
@@ -177,9 +176,6 @@ export default function PersonDetailPage() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: "0.6rem" }}>
             <span>{person.role}</span>
             <Pill tone={seniorityTones[person.seniority]}>{seniorityLabels[person.seniority]}</Pill>
-            <span>
-              {years} {years === 1 ? "yr" : "yrs"} experience
-            </span>
           </span>
         }
         actions={

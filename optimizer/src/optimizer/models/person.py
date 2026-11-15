@@ -8,7 +8,6 @@ from optimizer.models.skill import SkillLevel
 class PersonInput(BaseModel):
     id: str = Field(description="Identifier of the person.")
     seniority: Seniority = Field(description="Seniority level in the company.")
-    years_of_experience: float = Field(ge=0, description="Number of years of professional experience.")
     working_days_per_week: int = Field(
         default=5,
         ge=1,
