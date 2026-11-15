@@ -259,7 +259,7 @@ Because of the grid, 1 FTE across two people is 0.8 + 0.2 or 0.6 + 0.4, never 0.
 | $D_k,\, n_k,\, m_k$ | Steps needed, split limit and minimum level of skill $k$ |
 | $A_i$ | Person $i$'s availability in steps: $\lfloor 5 \cdot \min(\text{avail}_i, 1) \rfloor$ |
 | $l_{ik}$ | Person $i$'s proficiency in skill $k$, from 0 to 5 (0 if absent) |
-| $e_i$ | Person $i$'s years of professional experience |
+| $c_i$ | Person $i$'s cost efficiency from seniority: junior 1, mid 2/3, senior 1/3, lead 0 |
 | $G_i,\, R_i$ | Skill IDs person $i$ wants to grow in, and prefers to work on |
 | $a_{ij}$ | Affinity between persons $i$ and $j$, in $[-5, +5]$ |
 | $N$ | Steps the scope must staff (see [Need](#need)) |
@@ -284,9 +284,9 @@ People below a skill's minimum level get no variable for it, so `min_level` is a
 
 Each step a person gives to a skill earns:
 
-$$\sigma_{ik} = w_\text{perf} \cdot \frac{l_{ik}}{5} \;+\; w_\text{grow} \cdot [k \in G_i] \;+\; w_\text{cost} \cdot \Bigl(1 - \min\!\bigl(\tfrac{e_i}{20},\, 1\bigr)\Bigr) \;+\; w_\text{pref} \cdot [k \in R_i]$$
+$$\sigma_{ik} = w_\text{perf} \cdot \frac{l_{ik}}{5} \;+\; w_\text{grow} \cdot [k \in G_i] \;+\; w_\text{cost} \cdot c_i \;+\; w_\text{pref} \cdot [k \in R_i]$$
 
-The performance term rewards higher levels in the skill actually filled. The cost term favours adequately qualified over over-qualified staff.
+The performance term rewards higher levels in the skill actually filled. The cost term favours less senior, cheaper staff when they are qualified enough.
 
 ### Objective function (maximisation)
 

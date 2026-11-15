@@ -45,7 +45,6 @@ def project_id(client, org_headers):
                 "name": f"Person {i}",
                 "role": "Backend Developer",
                 "seniority": Seniority.SENIOR,
-                "years_of_experience": float(i + 1),
                 "working_days_per_week": 5,
             },
             headers=org_headers,
@@ -171,7 +170,6 @@ def _busy_person_setup(client, headers):
                 "name": name,
                 "role": "Backend Developer",
                 "seniority": Seniority.SENIOR,
-                "years_of_experience": 5.0,
             },
             headers=headers,
         ).json()["id"]
@@ -263,7 +261,6 @@ def test_solve_reports_unmet_skill_and_persists_coverage(client, org_headers):
                 "name": name,
                 "role": "Backend Developer",
                 "seniority": Seniority.SENIOR,
-                "years_of_experience": 5.0,
                 "skills": [{"id": "python", "level": level}],
             },
             headers=org_headers,
@@ -311,7 +308,6 @@ def test_solve_splits_a_need_on_the_allocation_grid(client, org_headers):
                 "name": name,
                 "role": "Backend Developer",
                 "seniority": Seniority.SENIOR,
-                "years_of_experience": 5.0,
                 "availability_windows": [
                     {"start": "2026-11-01", "end": "2026-11-30", "ratio": ratio}
                 ],
@@ -348,7 +344,6 @@ def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_h
                 "name": f"Member {i}",
                 "role": "Backend Developer",
                 "seniority": Seniority.SENIOR,
-                "years_of_experience": 5.0,
             },
             headers=org_headers,
         ).json()["id"]
@@ -399,7 +394,6 @@ def _create_person(client, headers, name, vacations=()):
             "name": name,
             "role": "Backend Developer",
             "seniority": Seniority.SENIOR,
-            "years_of_experience": 5.0,
             "vacations": list(vacations),
         },
         headers=headers,

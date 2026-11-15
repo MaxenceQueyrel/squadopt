@@ -34,8 +34,8 @@ test("importing a CSV adds new people and reports the result", async ({ page }) 
   await page.getByRole("button", { name: "Save" }).click();
 
   const csv = [
-    "id,name,role,seniority,years_of_experience,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities",
-    `${personId},${name},${roleId},mid,3,5,,[],[],[],[],[],{}`,
+    "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities",
+    `${personId},${name},${roleId},mid,5,,[],[],[],[],[],{}`,
   ].join("\n");
 
   await page.locator('input[type="file"]').setInputFiles({
@@ -58,8 +58,8 @@ test("importing a CSV with unknown roles/skills adds them to the catalog", async
   await page.goto("/people");
 
   const csv = [
-    "id,name,role,seniority,years_of_experience,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities",
-    `${personId},${name},${roleId},mid,3,5,,"[{""id"": ""${skillId}"", ""level"": 3}]",[],[],[],[],{}`,
+    "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities",
+    `${personId},${name},${roleId},mid,5,,"[{""id"": ""${skillId}"", ""level"": 3}]",[],[],[],[],{}`,
   ].join("\n");
 
   await page.locator('input[type="file"]').setInputFiles({

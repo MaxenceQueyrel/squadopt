@@ -44,7 +44,6 @@ export interface Person {
   name: string;
   role: string;
   seniority: Seniority;
-  years_of_experience: number;
   working_days_per_week: number; // 1–7
   skills: SkillLevel[];
   vacations: DateRange[]; // inclusive days off

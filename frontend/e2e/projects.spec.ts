@@ -12,7 +12,7 @@ const PROJECT_CSV_HEADER =
   "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,squads,date_ranges,phases";
 
 const PEOPLE_CSV_HEADER =
-  "id,name,role,seniority,years_of_experience,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
+  "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
 
 const quote = (value: unknown) => `"${JSON.stringify(value).replace(/"/g, '""')}"`;
 
@@ -233,17 +233,15 @@ test("the person picker flags skill and availability fit but lets anyone be assi
     i: number,
     name: string,
     seniority: string,
-    years: number,
     skills: { id: string; level: number }[],
     vacations: { start: string; end: string }[],
   ) =>
-    `picker-${i}-${suffix},${name},${role},${seniority},${years},5,,${quote(skills)},${quote(vacations)},[],[],[],{}`;
+    `picker-${i}-${suffix},${name},${role},${seniority},5,,${quote(skills)},${quote(vacations)},[],[],[],{}`;
   const rows = [
     personRow(
       0,
       fullMatch,
       "senior",
-      6,
       [
         { id: "python", level: 4 },
         { id: "react", level: 3 },
@@ -255,7 +253,6 @@ test("the person picker flags skill and availability fit but lets anyone be assi
       1,
       halfAway,
       "mid",
-      3,
       [{ id: "python", level: 4 }],
       [{ start: "2027-03-01", end: "2027-03-16" }],
     ),
@@ -263,14 +260,13 @@ test("the person picker flags skill and availability fit but lets anyone be assi
       2,
       away,
       "lead",
-      9,
       [
         { id: "python", level: 5 },
         { id: "react", level: 4 },
       ],
       [march],
     ),
-    personRow(3, noMatch, "junior", 1, [{ id: "python", level: 1 }], []),
+    personRow(3, noMatch, "junior", [{ id: "python", level: 1 }], []),
   ];
   await page.goto("/people");
   await page.locator('input[type="file"]').setInputFiles({
@@ -310,7 +306,7 @@ test("the person picker flags skill and availability fit but lets anyone be assi
   await expect(options.nth(2)).toContainText(halfAway);
   await expect(options.nth(3)).toContainText(noMatch);
 
-  await expect(option(fullMatch)).toContainText(`${role} · Senior · 6 yrs`);
+  await expect(option(fullMatch)).toContainText(`${role} · Senior`);
   await expect(option(fullMatch)).toHaveAttribute("data-tier", "full");
   await expect(option(fullMatch)).toContainText("python 4");
   await expect(option(fullMatch)).toContainText("react 3");

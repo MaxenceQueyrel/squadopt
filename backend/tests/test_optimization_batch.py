@@ -47,7 +47,6 @@ def _create_person(client, headers, name, **overrides) -> str:
             "name": name,
             "role": "Backend Developer",
             "seniority": Seniority.SENIOR,
-            "years_of_experience": 5.0,
             **overrides,
         },
         headers=headers,

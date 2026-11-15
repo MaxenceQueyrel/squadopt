@@ -30,7 +30,6 @@ def _create_person(client, headers, **overrides):
         "name": "Alice Martin",
         "role": "Backend Developer",
         "seniority": Seniority.SENIOR,
-        "years_of_experience": 8.0,
         "working_days_per_week": 5,
         "availability_windows": [],
         **overrides,

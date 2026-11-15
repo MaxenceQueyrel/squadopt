@@ -31,7 +31,6 @@ def _payload(**overrides):
         "name": "Alice Martin",
         "role": "Backend Developer",
         "seniority": Seniority.SENIOR,
-        "years_of_experience": 8.0,
         **overrides,
     }
 

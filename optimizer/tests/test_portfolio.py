@@ -35,7 +35,6 @@ def _person(person_id, availability=1.0, **skills):
     return PersonInput(
         id=person_id,
         seniority=Seniority.SENIOR,
-        years_of_experience=5,
         availability_windows=windows,
         skills=[SkillLevel(id=skill, level=level) for skill, level in skills.items()],
     )

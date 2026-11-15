@@ -1,6 +1,14 @@
-from optimizer.models import ProjectInput, PersonInput, AssignmentWeights
+from optimizer.models import ProjectInput, PersonInput, AssignmentWeights, Seniority
 
 MAX_SKILL_LEVEL = 5.0  # matches the documented bound on SkillLevel.level
+
+# Seniority stands in for how expensive a person is: the cost term rewards juniors most.
+COST_EFFICIENCY = {
+    Seniority.JUNIOR: 1.0,
+    Seniority.MID: 2 / 3,
+    Seniority.SENIOR: 1 / 3,
+    Seniority.LEAD: 0.0,
+}
 
 
 def compute_skill_scores(
@@ -19,8 +27,8 @@ def compute_skill_scores(
         Mapping of (person ID, skill ID) to the score earned per FTE the person gives to
         that skill. Performance is the person's level in the skill over the maximum level;
         growth and preference reward a skill the person lists as a growth target or a
-        preference; cost depends on the person only. Chemistry is excluded here because
-        it is pairwise and must be linearized separately in the MILP.
+        preference; cost depends on the person's seniority only. Chemistry is excluded
+        here because it is pairwise and must be linearized separately in the MILP.
     """
     scores = {}
     for person in people:
@@ -29,11 +37,7 @@ def compute_skill_scores(
             scores[person.id, req.id] = (
                 weights.performance * levels.get(req.id, 0.0) / MAX_SKILL_LEVEL
                 + weights.growth * float(req.id in person.growth_targets)
-                + weights.cost * (1.0 - _experience_score(person))
+                + weights.cost * COST_EFFICIENCY[person.seniority]
                 + weights.preference * float(req.id in person.preferences)
             )
     return scores
-
-
-def _experience_score(person: PersonInput) -> float:
-    return min(person.years_of_experience / 20.0, 1.0)
