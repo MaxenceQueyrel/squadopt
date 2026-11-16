@@ -336,7 +336,8 @@ def test_solve_splits_a_need_on_the_allocation_grid(client, org_headers):
 
 def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_headers):
     client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=org_headers)
-    # A 1 FTE need goes to at most one person, so a squad of two can never fit it.
+    # A 1 FTE need goes to at most one person, so forcing two people into it can
+    # never fit.
     member_ids = [
         client.post(
             "/api/v1/people/",
@@ -354,7 +355,7 @@ def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_h
         json={
             "name": "Project Z",
             "skill_requirements": [ONE_FTE_NEED],
-            "squads": [{"member_ids": member_ids}],
+            "included_person_ids": member_ids,
         },
         headers=org_headers,
     ).json()["id"]
@@ -365,19 +366,12 @@ def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_h
     detail = response.json()["detail"]
     assert detail["project_id"] == project_id
     assert detail["message"]
-    assert detail["conflicts"] == [
-        {
-            "phase_id": None,
-            "reason": "squad_conflict",
-            "required_fte": 1.0,
-            "need_fte": 1.0,
-            "squad_indices": [0],
-            "forced_person_ids": [],
-            "person_id": None,
-            "project_ids": [],
-            "period": None,
-        }
-    ]
+    [conflict] = detail["conflicts"]
+    assert conflict["phase_id"] is None
+    assert conflict["reason"] == "forced_member_conflict"
+    assert conflict["required_fte"] == 1.0
+    assert conflict["need_fte"] == 1.0
+    assert conflict["forced_person_ids"] == member_ids
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []
 
 
@@ -398,16 +392,6 @@ def _create_person(client, headers, name, vacations=()):
         },
         headers=headers,
     ).json()["id"]
-
-
-def _oversized_squad(client, headers, vacations=()):
-    # A 1 FTE need goes to at most one person, so a squad of two can never fit it
-    # while both its members are free.
-    return {
-        "member_ids": [
-            _create_person(client, headers, f"Squad {i}", vacations) for i in range(2)
-        ]
-    }
 
 
 def test_solve_without_window_reports_no_start(client, org_headers, project_id):
@@ -447,14 +431,16 @@ def test_solve_with_window_scans_weekly_starts(client, org_headers, project_id):
 
 def test_solve_with_window_skips_infeasible_starts(client, org_headers):
     client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=org_headers)
-    squad = _oversized_squad(client, org_headers, vacations=[WEEK_3])
-    solo_id = _create_person(client, org_headers, "Solo", vacations=[WEEK_1])
+    # A 1 FTE need goes to at most one person, so forcing two people into it only
+    # fits once one of them is away.
+    leaving_id = _create_person(client, org_headers, "Leaving", [WEEK_2, WEEK_3])
+    staying_id = _create_person(client, org_headers, "Staying")
     project_id = client.post(
         "/api/v1/projects/",
         json={
             "name": "Project W",
             "skill_requirements": [ONE_FTE_NEED],
-            "squads": [squad],
+            "included_person_ids": [leaving_id, staying_id],
             "date_ranges": [WEEK_1],
             "start_window": WINDOW,
         },
@@ -476,11 +462,11 @@ def test_solve_with_window_skips_infeasible_starts(client, org_headers):
     }
     assert second["feasible"] and third["feasible"]
     assert body["best"]["start_date"] == WEEK_2["start"]
-    assert [m["person_id"] for m in body["best"]["members"]] == [solo_id]
+    assert [m["person_id"] for m in body["best"]["members"]] == [staying_id]
     assert second["team"]["members"] == body["best"]["members"]
     assert second["team"]["start_date"] == WEEK_2["start"]
     assert third["team"]["start_date"] == WEEK_3["start"]
-    assert [m["person_id"] for m in third["team"]["members"]] == [solo_id]
+    assert [m["person_id"] for m in third["team"]["members"]] == [staying_id]
 
 
 def test_start_candidates_carry_their_team_and_can_be_applied(client, org_headers):
@@ -532,13 +518,15 @@ def test_solve_with_window_returns_409_when_every_start_is_infeasible(
     client, org_headers
 ):
     client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=org_headers)
-    squad = _oversized_squad(client, org_headers)
+    # A 1 FTE need goes to at most one person, so forcing two people into it can
+    # never fit.
+    forced_ids = [_create_person(client, org_headers, f"Forced {i}") for i in range(2)]
     project_id = client.post(
         "/api/v1/projects/",
         json={
             "name": "Project Z",
             "skill_requirements": [ONE_FTE_NEED],
-            "squads": [squad],
+            "included_person_ids": forced_ids,
             "date_ranges": [WEEK_1],
             "start_window": WINDOW,
         },
@@ -550,5 +538,5 @@ def test_solve_with_window_returns_409_when_every_start_is_infeasible(
     assert response.status_code == 409
     detail = response.json()["detail"]
     assert detail["project_id"] == project_id
-    assert [c["reason"] for c in detail["conflicts"]] == ["squad_conflict"]
+    assert [c["reason"] for c in detail["conflicts"]] == ["forced_member_conflict"]
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []
