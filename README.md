@@ -147,7 +147,7 @@ make run-frontend        Run frontend dev server locally
 
 make test                Run all tests (optimizer + API)
 make test-optimizer      Run optimizer unit tests only
-make test-api            Run backend API tests only (needs migrated Postgres)
+make test-api            Run backend API tests only (needs Postgres: make infra)
 make test-e2e            Run frontend Playwright end-to-end tests
 make test-e2e-headed     Run e2e tests with the browser window visible
 make test-e2e-ui         Run e2e tests in Playwright's interactive UI mode
@@ -162,6 +162,10 @@ make format-frontend     Format frontend with biome
 make help                List targets with their descriptions
 make clean               Remove caches and build artifacts
 ```
+
+### Backend tests use their own database
+
+`make test-api` runs against a separate `team_manager_test` database on the dev Postgres (`:5432`, started by `make infra`). It never touches the dev `team_manager` database. The target creates the test database if it doesn't exist, applies the Alembic migrations, then runs pytest. The tests wipe users and organizations after each test, so [backend/tests/conftest.py](backend/tests/conftest.py) aborts the run if `DATABASE_URL` names any other database.
 
 ### End-to-end tests run in their own stack
 
@@ -189,7 +193,7 @@ Every pull request (and every push to `main`/`dev`) runs [.github/workflows/ci.y
 | `typecheck-optimizer` | `make typecheck-optimizer` (ty) |
 | `typecheck-backend` | `make typecheck-backend` (ty) |
 | `test-optimizer` | `make test-optimizer` (pytest) |
-| `test-api` | Applies Alembic migrations against a Postgres service container, then `make test-api` (pytest) |
+| `test-api` | `make test-api` against a Postgres service container (creates and migrates `team_manager_test`, then runs pytest) |
 | `lint-frontend` | `make lint-frontend` (biome) |
 | `format-frontend` | `biome format` check (no `--write`) over the frontend source |
 | `build-frontend` | `bun run build` (`tsc -b && vite build`) |

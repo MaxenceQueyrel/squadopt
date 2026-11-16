@@ -9,6 +9,10 @@ COMPOSE     = docker compose
 DEV_FILE    = -f infra/docker-compose.dev.yml
 PROD_FILE   = -f infra/docker-compose.yml
 
+# Backend tests wipe users and organizations, so they get their own database
+# on the dev Postgres server (make infra) instead of the dev `team_manager` one.
+TEST_DATABASE_URL = postgresql+psycopg://team_manager:team_manager@localhost:5432/team_manager_test
+
 # ── Docker ────────────────────────────────────────────────────────────────────
 
 dev:              ## Start the full stack in development mode (hot-reload)
@@ -63,8 +67,11 @@ test:             ## Run all tests
 test-optimizer:   ## Run optimizer unit tests
 	cd optimizer && uv run pytest tests/ -v
 
-test-api:         ## Run backend API tests
-	cd backend && uv run pytest tests/ -v
+test-api:         ## Run backend API tests on an isolated team_manager_test DB (created and migrated first)
+	cd backend && export DATABASE_URL=$(TEST_DATABASE_URL) && \
+	  uv run python scripts/create_test_db.py && \
+	  uv run alembic upgrade head && \
+	  uv run pytest tests/ -v
 
 test-e2e:         ## Run Playwright e2e tests on an isolated stack (:3001/:8001, tmpfs Postgres :5433)
 	./scripts/test-e2e.sh

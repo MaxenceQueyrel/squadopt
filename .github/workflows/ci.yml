@@ -88,9 +88,8 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Apply auth-schema migrations
-        working-directory: backend
-        run: uv run alembic upgrade head
+      # make test-api creates and migrates its own team_manager_test database
+      # on this server before running pytest.
       - run: make test-api
 
   lint-frontend:
