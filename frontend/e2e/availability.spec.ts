@@ -23,7 +23,7 @@ test("assignment-driven reductions show up on the capacity timeline", async ({ p
   await page.getByLabel("From", { exact: true }).fill("2026-01-01");
   await page.getByLabel("To", { exact: true }).fill("2026-01-10");
 
-  await expect(page.getByTitle("2026-01-01: 40%")).toBeVisible();
+  await expect(page.getByRole("button", { name: `${name}, 2026-01-01: 40%` })).toBeVisible();
 
   await page.getByRole("link", { name }).click();
   await expect(page).toHaveURL(/\/people\/[^/]+$/);

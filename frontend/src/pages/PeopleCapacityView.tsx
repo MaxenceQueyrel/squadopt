@@ -4,14 +4,16 @@ import { useShallow } from "zustand/shallow";
 import {
   AvailabilityCalendar,
   AvailabilityLegend,
+  type CalendarSelection,
   type TimelineOverlay,
   type TimelineRow,
 } from "@/components/common/AvailabilityCalendar";
 import { Card, colors, Field, inputStyle, selectStyle } from "@/components/common/ui";
 import { TagSkillInput } from "@/components/editors/listEditors";
-import { peopleApi } from "@/services/api";
+import { CommitmentBreakdown } from "@/components/people/CommitmentBreakdown";
+import { assignmentsApi, peopleApi } from "@/services/api";
 import { knownSkillIds, useAppStore } from "@/store";
-import type { PersonAvailability, Seniority } from "@/types";
+import type { Assignment, PersonAvailability, Seniority } from "@/types";
 
 const SENIORITIES: Seniority[] = ["junior", "mid", "senior", "lead"];
 
@@ -69,6 +71,8 @@ export default function PeopleCapacityView() {
   const [availability, setAvailability] = useState<PersonAvailability[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [selection, setSelection] = useState<CalendarSelection | null>(null);
 
   const {
     start,
@@ -79,7 +83,11 @@ export default function PeopleCapacityView() {
     minSkillLevel,
     squadOnly,
   } = filters;
-  const update = (changes: Partial<CapacityFilters>) => setFilters((f) => ({ ...f, ...changes }));
+  // Every filter, the range and the overlay project change what the grid shows.
+  const update = (changes: Partial<CapacityFilters>) => {
+    setFilters((f) => ({ ...f, ...changes }));
+    setSelection(null);
+  };
 
   useEffect(() => {
     // Replace rather than push so typing a date doesn't flood the history stack.
@@ -90,6 +98,10 @@ export default function PeopleCapacityView() {
     fetchPeople();
     fetchProjects();
     fetchSkills();
+    assignmentsApi
+      .list()
+      .then(setAssignments)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [fetchPeople, fetchProjects, fetchSkills]);
 
   useEffect(() => {
@@ -148,6 +160,7 @@ export default function PeopleCapacityView() {
         label: person.name,
         href: `/people/${person.id}`,
         segments: byPersonId.get(person.id) ?? [],
+        capacity: person.base_capacity,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [filteredPeople, availability]);
@@ -170,6 +183,16 @@ export default function PeopleCapacityView() {
       }));
     return [...dateRangeOverlays, ...phaseOverlays];
   }, [selectedProject]);
+
+  // Rows only hold people that pass the filters, so a filtered-out person closes the panel.
+  const selectedPerson = selection
+    ? filteredPeople.find((p) => p.id === selection.rowId)
+    : undefined;
+  const selectedRatio = selection
+    ? rows
+        .find((row) => row.id === selection.rowId)
+        ?.segments.find((seg) => seg.start <= selection.day && selection.day <= seg.end)?.ratio
+    : undefined;
 
   return (
     <div>
@@ -313,7 +336,32 @@ export default function PeopleCapacityView() {
             {people.length === 0 ? "No people found." : "No people match the selected filters."}
           </p>
         ) : (
-          <AvailabilityCalendar start={start} end={end} rows={rows} overlays={overlays} />
+          <>
+            <AvailabilityCalendar
+              start={start}
+              end={end}
+              rows={rows}
+              overlays={overlays}
+              selection={selection}
+              onSelect={(clicked) =>
+                setSelection(
+                  selection?.rowId === clicked.rowId && selection.day === clicked.day
+                    ? null
+                    : clicked,
+                )
+              }
+            />
+            {selection && selectedPerson && selectedRatio !== undefined && (
+              <CommitmentBreakdown
+                person={selectedPerson}
+                assignments={assignments}
+                range={{ start: selection.day, end: selection.day }}
+                freeFte={selectedRatio}
+                showName
+                onClose={() => setSelection(null)}
+              />
+            )}
+          </>
         )}
       </Card>
     </div>
