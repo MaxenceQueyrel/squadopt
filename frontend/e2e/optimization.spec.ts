@@ -492,7 +492,7 @@ test("selected projects are optimized together and applied all at once", async (
     PROJECT_CSV_HEADER,
     ...names.map(
       (name, i) =>
-        `batch-${i}-${suffix},${name},,${i === 0 ? "high" : "low"},${quote(skills)},${quote(excluded)},[],[],${quote(dateRanges)},[]`,
+        `batch-${i}-${suffix},${name},,${i === 0 ? "high" : "low"},${quote(skills)},${quote(excluded)},[],${quote(dateRanges)},[]`,
     ),
   ].join("\n");
   await page.goto("/projects");

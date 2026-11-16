@@ -366,12 +366,18 @@ def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_h
     detail = response.json()["detail"]
     assert detail["project_id"] == project_id
     assert detail["message"]
-    [conflict] = detail["conflicts"]
-    assert conflict["phase_id"] is None
-    assert conflict["reason"] == "forced_member_conflict"
-    assert conflict["required_fte"] == 1.0
-    assert conflict["need_fte"] == 1.0
-    assert conflict["forced_person_ids"] == member_ids
+    assert detail["conflicts"] == [
+        {
+            "phase_id": None,
+            "reason": "forced_member_conflict",
+            "required_fte": 1.0,
+            "need_fte": 1.0,
+            "forced_person_ids": member_ids,
+            "person_id": None,
+            "project_ids": [],
+            "period": None,
+        }
+    ]
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []
 
 
