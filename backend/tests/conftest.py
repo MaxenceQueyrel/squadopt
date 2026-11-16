@@ -1,15 +1,37 @@
-import pytest
-from fastapi.testclient import TestClient
+import os
 
-from api.db.models import (
+import pytest
+
+TEST_DATABASE = "team_manager_test"
+
+# Must be set before api.db.session is imported: it builds the engine from
+# DATABASE_URL at import time, and the default points at the dev database.
+os.environ.setdefault(
+    "DATABASE_URL",
+    f"postgresql+psycopg://team_manager:team_manager@localhost:5432/{TEST_DATABASE}",
+)
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from api.db.models import (  # noqa: E402
     Organization,
     OrganizationMember,
     RefreshToken,
     User,
     UserRole,
 )
-from api.db.session import SessionLocal
-from api.main import app
+from api.db.session import SessionLocal, engine  # noqa: E402
+from api.main import app  # noqa: E402
+
+# _cleanup_users deletes every user and organization, so refuse to run against
+# anything but the test database (e.g. a DATABASE_URL exported for the dev app).
+# Checked at import rather than in a session hook: from the repo root this
+# conftest is only loaded during collection, after pytest_sessionstart has run.
+if engine.url.database != TEST_DATABASE:
+    pytest.exit(
+        f"Backend tests must run against the {TEST_DATABASE!r} database, "
+        f"not {engine.url.database!r}. Run them with `make test-api`."
+    )
 
 
 @pytest.fixture

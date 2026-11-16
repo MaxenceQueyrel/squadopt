@@ -95,7 +95,8 @@ backend/
 ├── alembic/                Migrations for the auth schema (Postgres)
 │   └── versions/
 ├── scripts/
-│   └── bootstrap_manager.py  One-off CLI to promote the first manager account
+│   ├── bootstrap_manager.py  One-off CLI to promote the first manager account
+│   └── create_test_db.py     Creates the test database (used by make test-api)
 └── tests/
 ```
 
@@ -130,13 +131,15 @@ Full schema available at <http://localhost:8000/docs> when the server is running
 ## Tests
 
 ```bash
-# From repo root
+# From repo root (needs Postgres: make infra)
 make test-api
 
-# Or manually
+# Or manually, once make test-api has created and migrated team_manager_test
 cd backend
 uv run pytest tests/ -v
 ```
+
+The tests use their own `team_manager_test` database, never the dev `team_manager` one. `tests/conftest.py` defaults `DATABASE_URL` to it and aborts if `DATABASE_URL` names any other database.
 
 ---
 

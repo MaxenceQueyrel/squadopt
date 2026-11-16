@@ -5,6 +5,7 @@
 - Use **pytest** for all Python tests.
 - Test files live in the `tests/` directory of each package (`optimizer/tests/`, `backend/tests/`).
 - Run tests with `make test-optimizer` or `make test-api`, or directly via `uv run pytest tests/ -v`.
+- Backend tests delete every user and organization, so they run against their own `team_manager_test` database on the dev Postgres (`make infra`). `make test-api` creates and migrates it first. `backend/tests/conftest.py` defaults `DATABASE_URL` to it and aborts the session if `DATABASE_URL` names any other database. Never point the tests at the dev `team_manager` database.
 
 ## Typing
 
