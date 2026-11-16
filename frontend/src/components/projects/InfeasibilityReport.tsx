@@ -25,30 +25,15 @@ function explain(
     conflict.need_fte < conflict.required_fte
       ? `the ${need} FTE ${scope} can staff from who is available (of ${formatFte(conflict.required_fte)} required)`
       : `the ${need} FTE ${scope} needs`;
-  const squads = conflict.squad_indices.map((i) => {
-    const memberIds = project.squads[i].member_ids;
-    return `${listNames(memberIds.map(nameOf))} (${memberIds.length} people)`;
-  });
-  const squadPhrase = `${squads.length === 1 ? "Squad of" : "Squads of"} ${squads.join(" and of ")}`;
   const forced = listNames(conflict.forced_person_ids.map(nameOf));
   const oneForced = conflict.forced_person_ids.length === 1;
   const forcedNoun = oneForced ? "member" : "members";
 
   switch (conflict.reason) {
-    case "squad_conflict":
-      return {
-        reason: `${squadPhrase} must be staffed together at ${ALLOCATION_STEP} FTE or more each, which doesn't fit ${fit}.`,
-        hint: `Drop or shrink the ${squads.length === 1 ? "squad" : "squads"}, or raise the required FTE or max people.`,
-      };
     case "forced_member_conflict":
       return {
         reason: `Forced ${forcedNoun} ${forced} can't ${oneForced ? "be" : "all be"} staffed within ${fit}.`,
         hint: `Un-force ${oneForced ? "this member" : "one of them"}, or raise the required FTE or max people.`,
-      };
-    case "squad_and_forced_member_conflict":
-      return {
-        reason: `${squadPhrase} and forced ${forcedNoun} ${forced} can't all be staffed within ${fit}.`,
-        hint: "Drop or shrink a squad, or un-force a member.",
       };
     case "fte_not_reachable":
       return {

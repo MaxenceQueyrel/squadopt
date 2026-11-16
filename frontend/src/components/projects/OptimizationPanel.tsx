@@ -129,7 +129,6 @@ export function OptimizationPanel({
         {project.phases.length
           ? `${project.phases.length} phase(s)`
           : `${requiredFte(project.skill_requirements)} FTE needed`}
-        {project.squads.length > 0 && ` · ${project.squads.length} squad(s)`}
         {project.included_person_ids.length > 0 &&
           ` · ${project.included_person_ids.length} forced member(s)`}
       </p>

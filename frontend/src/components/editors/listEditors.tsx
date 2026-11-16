@@ -9,7 +9,6 @@ import type {
   ProjectPhase,
   SkillLevel,
   SkillRequirement,
-  Squad,
 } from "@/types";
 
 const rowStyle = {
@@ -459,53 +458,6 @@ export function PersonMultiSelect({
           {p.name}
         </label>
       ))}
-    </div>
-  );
-}
-
-export function SquadsEditor({
-  value,
-  onChange,
-  people,
-}: {
-  value: Squad[];
-  onChange: (v: Squad[]) => void;
-  people: Person[];
-}) {
-  const update = (i: number, member_ids: string[]) =>
-    onChange(value.map((s, idx) => (idx === i ? { member_ids } : s)));
-
-  return (
-    <div>
-      {value.map((squad, i) => (
-        <div
-          key={i}
-          style={{
-            border: `1px solid ${colors.border}`,
-            borderRadius: 6,
-            padding: "0.6rem",
-            marginBottom: "0.6rem",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.4rem",
-            }}
-          >
-            <strong style={{ fontSize: "0.85rem" }}>Squad {i + 1}</strong>
-            <RemoveButton onClick={() => onChange(value.filter((_, idx) => idx !== i))} />
-          </div>
-          <PersonMultiSelect
-            value={squad.member_ids}
-            onChange={(ids) => update(i, ids)}
-            people={people}
-          />
-        </div>
-      ))}
-      <Button onClick={() => onChange([...value, { member_ids: [] }])}>+ Add squad</Button>
     </div>
   );
 }

@@ -24,8 +24,8 @@ test("a project whose dates are past but is not complete asks for a review", asy
   const requirements = JSON.stringify([{ id: "general", min_level: 0, fte: 1 }]);
   const dateRanges = JSON.stringify([{ start: "2025-07-01", end: "2025-09-30" }]);
   const csv = [
-    "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,squads,date_ranges,phases",
-    `${projectId},${projectName},,high,"${requirements.replace(/"/g, '""')}",[],[],[],"${dateRanges.replace(/"/g, '""')}",[]`,
+    "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,date_ranges,phases",
+    `${projectId},${projectName},,high,"${requirements.replace(/"/g, '""')}",[],[],"${dateRanges.replace(/"/g, '""')}",[]`,
   ].join("\n");
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({

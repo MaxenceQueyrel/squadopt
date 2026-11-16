@@ -68,10 +68,6 @@ export interface ProjectsImportSummary {
   skipped: string[]; // ids that already existed and were left untouched
 }
 
-export interface Squad {
-  member_ids: string[];
-}
-
 export interface ProjectPhase {
   id: string;
   skill_requirements: SkillRequirement[];
@@ -85,7 +81,6 @@ export interface Project {
   skill_requirements: SkillRequirement[];
   excluded_person_ids: string[];
   included_person_ids: string[];
-  squads: Squad[];
   date_ranges: DateRange[];
   phases: ProjectPhase[];
   // Earliest and latest allowed start; the optimizer shifts the whole schedule within it.
@@ -180,9 +175,7 @@ export interface PhaseCoverage {
 }
 
 export type InfeasibilityReason =
-  | "squad_conflict"
   | "forced_member_conflict"
-  | "squad_and_forced_member_conflict"
   | "fte_not_reachable"
   | "cross_project_forced_conflict";
 
@@ -191,7 +184,6 @@ export interface PhaseConflict {
   reason: InfeasibilityReason;
   required_fte: number; // the sum of the phase's skill FTE
   need_fte: number; // FTE the solver had to staff exactly, after capping by pool capacity
-  squad_indices: number[]; // positions in project.squads
   forced_person_ids: string[]; // subset of project.included_person_ids
   // Set for cross_project_forced_conflict only: the forced person, every project they are
   // forced into (this one included), and the overlap that can't fit; period is null when

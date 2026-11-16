@@ -35,7 +35,6 @@ interface CapacityFilters {
   seniorities: Seniority[];
   skills: string[];
   minSkillLevel: number;
-  squadOnly: boolean;
 }
 
 function filtersFromParams(params: URLSearchParams): CapacityFilters {
@@ -47,7 +46,6 @@ function filtersFromParams(params: URLSearchParams): CapacityFilters {
     seniorities: SENIORITIES.filter((s) => params.getAll("seniority").includes(s)),
     skills: params.getAll("skill"),
     minSkillLevel: parseFloat(params.get("min_level") ?? "") || 0,
-    squadOnly: params.get("squad_only") === "1",
   };
 }
 
@@ -57,7 +55,6 @@ function filtersToParams(filters: CapacityFilters): URLSearchParams {
   for (const s of filters.seniorities) params.append("seniority", s);
   for (const s of filters.skills) params.append("skill", s);
   if (filters.minSkillLevel > 0) params.set("min_level", String(filters.minSkillLevel));
-  if (filters.squadOnly) params.set("squad_only", "1");
   return params;
 }
 
@@ -81,7 +78,6 @@ export default function PeopleCapacityView() {
     seniorities: seniorityFilter,
     skills: skillFilter,
     minSkillLevel,
-    squadOnly,
   } = filters;
   // Every filter, the range and the overlay project change what the grid shows.
   const update = (changes: Partial<CapacityFilters>) => {
@@ -119,17 +115,6 @@ export default function PeopleCapacityView() {
   }, [start, end]);
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
-  const squadFilterAvailable = (selectedProject?.squads.length ?? 0) > 0;
-
-  const squadMemberIds = useMemo(() => {
-    const ids = new Set<string>();
-    selectedProject?.squads.forEach((squad) => {
-      squad.member_ids.forEach((id) => {
-        ids.add(id);
-      });
-    });
-    return ids;
-  }, [selectedProject]);
 
   const filteredPeople = useMemo(() => {
     return people.filter((person) => {
@@ -139,18 +124,9 @@ export default function PeopleCapacityView() {
         !person.skills.some((s) => skillFilter.includes(s.id) && s.level >= minSkillLevel)
       )
         return false;
-      if (squadOnly && squadFilterAvailable && !squadMemberIds.has(person.id)) return false;
       return true;
     });
-  }, [
-    people,
-    seniorityFilter,
-    skillFilter,
-    minSkillLevel,
-    squadOnly,
-    squadFilterAvailable,
-    squadMemberIds,
-  ]);
+  }, [people, seniorityFilter, skillFilter, minSkillLevel]);
 
   const rows: TimelineRow[] = useMemo(() => {
     const byPersonId = new Map(availability.map((a) => [a.person_id, a.segments]));
@@ -217,7 +193,7 @@ export default function PeopleCapacityView() {
           <Field label="Overlay project" hint="Highlights the project's period on the timeline">
             <select
               value={selectedProjectId}
-              onChange={(e) => update({ projectId: e.target.value, squadOnly: false })}
+              onChange={(e) => update({ projectId: e.target.value })}
               style={selectStyle}
             >
               <option value="">— none —</option>
@@ -233,7 +209,7 @@ export default function PeopleCapacityView() {
       </Card>
 
       <Card style={{ marginBottom: "1.5rem" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 1rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 1rem" }}>
           <Field label="Seniority" hint="Only show these levels">
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
               {SENIORITIES.map((s) => (
@@ -283,33 +259,6 @@ export default function PeopleCapacityView() {
                 />
               </div>
             )}
-          </Field>
-          <Field
-            label="Squad membership"
-            hint={
-              squadFilterAvailable
-                ? "Restrict to the selected project's squad members"
-                : "Select a project with at least one squad to enable"
-            }
-          >
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                fontSize: "0.85rem",
-                cursor: squadFilterAvailable ? "pointer" : "not-allowed",
-                opacity: squadFilterAvailable ? 1 : 0.5,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={squadOnly}
-                disabled={!squadFilterAvailable}
-                onChange={(e) => update({ squadOnly: e.target.checked })}
-              />
-              Squad members only
-            </label>
           </Field>
         </div>
       </Card>
