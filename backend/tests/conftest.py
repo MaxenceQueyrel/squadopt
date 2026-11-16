@@ -23,17 +23,16 @@ from api.db.models import (  # noqa: E402
 from api.db.session import SessionLocal, engine  # noqa: E402
 from api.main import app  # noqa: E402
 
-
-def pytest_sessionstart(session):
-    # _cleanup_users deletes every user and organization, so refuse to run
-    # against anything but the test database (e.g. a DATABASE_URL exported for
-    # the dev app).
-    if engine.url.database != TEST_DATABASE:
-        pytest.exit(
-            f"Backend tests must run against the {TEST_DATABASE!r} database, "
-            f"not {engine.url.database!r}. Run them with `make test-api`.",
-            returncode=1,
-        )
+# _cleanup_users deletes every user and organization, so refuse to run against
+# anything but the test database (e.g. a DATABASE_URL exported for the dev app).
+# Checked at import rather than in a session hook: from the repo root this
+# conftest is only loaded during collection, after pytest_sessionstart has run.
+if engine.url.database != TEST_DATABASE:
+    pytest.exit(
+        f"Backend tests must run against the {TEST_DATABASE!r} database, "
+        f"not {engine.url.database!r}. Run them with `make test-api`.",
+        returncode=1,
+    )
 
 
 @pytest.fixture

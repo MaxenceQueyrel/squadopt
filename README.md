@@ -167,6 +167,8 @@ make clean               Remove caches and build artifacts
 
 `make test-api` runs against a separate `team_manager_test` database on the dev Postgres (`:5432`, started by `make infra`). It never touches the dev `team_manager` database. The target creates the test database if it doesn't exist, applies the Alembic migrations, then runs pytest. The tests wipe users and organizations after each test, so [backend/tests/conftest.py](backend/tests/conftest.py) aborts the run if `DATABASE_URL` names any other database.
 
+To use another Postgres server, override the test URL (the database name must stay `team_manager_test`): `make test-api TEST_DATABASE_URL=postgresql+psycopg://user:pass@host:5433/team_manager_test`. `make test-api` ignores `DATABASE_URL`.
+
 ### End-to-end tests run in their own stack
 
 `make test-e2e` (and its `-headed` / `-ui` variants) never touches the app you run by hand, so you can keep `make run-backend` + `make run-frontend` up while it runs:

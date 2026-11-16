@@ -11,7 +11,7 @@ PROD_FILE   = -f infra/docker-compose.yml
 
 # Backend tests wipe users and organizations, so they get their own database
 # on the dev Postgres server (make infra) instead of the dev `team_manager` one.
-TEST_DATABASE_URL = postgresql+psycopg://team_manager:team_manager@localhost:5432/team_manager_test
+TEST_DATABASE_URL ?= postgresql+psycopg://team_manager:team_manager@localhost:5432/team_manager_test
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 
