@@ -30,8 +30,7 @@ from api.main import app  # noqa: E402
 if engine.url.database != TEST_DATABASE:
     pytest.exit(
         f"Backend tests must run against the {TEST_DATABASE!r} database, "
-        f"not {engine.url.database!r}. Run them with `make test-api`.",
-        returncode=1,
+        f"not {engine.url.database!r}. Run them with `make test-api`."
     )
 
 
