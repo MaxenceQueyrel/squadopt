@@ -7,7 +7,6 @@ from optimizer.models.portfolio import PortfolioProject, PortfolioResult, Projec
 from optimizer.models.project import ProjectInput, ProjectPhase
 from optimizer.models.seniority import Seniority
 from optimizer.models.skill import Skill, SkillLevel, SkillRequirement
-from optimizer.models.squad import Squad
 from optimizer.models.start_scan import StartCandidate, StartDateScan
 
 __all__ = [
@@ -27,7 +26,6 @@ __all__ = [
     "ProjectPriority",
     "Seniority",
     "SkillCoverage",
-    "Squad",
     "StartCandidate",
     "StartDateScan",
     "Skill",

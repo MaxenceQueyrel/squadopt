@@ -4,7 +4,7 @@ Framework-agnostic Operations Research engine for team assignment. Contains zero
 
 Managed with **uv** as a workspace member.
 
-> For the mathematical model (objective, constraints, squads, phased/handover formulation), see [the root README's "Optimization model" section](../README.md#optimization-model). This document covers the code structure only.
+> For the mathematical model (objective, constraints, phased/handover formulation), see [the root README's "Optimization model" section](../README.md#optimization-model). This document covers the code structure only.
 
 ---
 
@@ -35,7 +35,6 @@ optimizer/
 │   ├── models/             Input/output Pydantic models
 │   │   ├── project.py        ProjectInput, ProjectPhase
 │   │   ├── person.py         PersonInput
-│   │   ├── squad.py          Squad (available members co-selected all-or-nothing; unavailable members skipped)
 │   │   ├── skill.py          Skill, SkillLevel, SkillRequirement (min_level, fte, max_people)
 │   │   ├── date_range.py     DateRange, AvailabilityWindow
 │   │   ├── seniority.py      Seniority
@@ -68,7 +67,7 @@ optimizer/
 1. **Feasibility filter** (`constraints.feasible_people`) — drops excluded persons and anyone whose effective availability over the project's date range, floored to the grid, is below one step (0.2 FTE).
 2. **Per-share scores** (`objectives.compute_skill_scores`) — for each (person, required skill): the person's level in that skill over 5, whether the skill is a growth target or a preference, and the seniority-based cost.
 3. **Need** — each skill's `fte`, capped by what its qualified people can supply (availability, `max_people`), computed jointly by a small MILP because one person's availability may be claimed by several skills. A short supply becomes partial coverage, not an error.
-4. **MILP build** — per (person, skill) integer day counts `d ∈ {0..5}` (share = 0.2·d), created only for people at or above the skill's `min_level`, with a binary "fills this skill" flag counted against `max_people`. Each person's days stay within their floored availability, a binary selection variable links to the skills they fill, and the days sum to the need. Forced inclusions, squad co-selection, and chemistry (shared FTE capped by each person's total) are added on top.
+4. **MILP build** — per (person, skill) integer day counts `d ∈ {0..5}` (share = 0.2·d), created only for people at or above the skill's `min_level`, with a binary "fills this skill" flag counted against `max_people`. Each person's days stay within their floored availability, a binary selection variable links to the skills they fill, and the days sum to the need. Forced inclusions and chemistry (shared FTE capped by each person's total) are added on top.
 5. **Solve** — `pulp.PULP_CBC_CMD` maximises the objective, minus a tiny per-person and per-share headcount penalty that prefers fewer, fuller allocations.
 6. **Phased projects** — if the project defines `phases`, they are solved jointly in a single MILP; with a `handover` weight > 0 the FTE a person keeps across consecutive phases is rewarded.
 

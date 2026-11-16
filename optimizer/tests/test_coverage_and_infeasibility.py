@@ -18,7 +18,6 @@ from optimizer.models import (
     SkillCoverage,
     SkillLevel,
     SkillRequirement,
-    Squad,
 )
 
 PERF_ONLY = AssignmentWeights(performance=1.0, chemistry=0.0, growth=0.0, cost=0.0)
@@ -170,33 +169,30 @@ def _infeasibility(solver, project, people):
     return exc_info.value.conflicts
 
 
-def test_squad_conflict_names_the_blocking_squad(solver):
-    members = [_person("m0"), _person("m1")]
-    # The first squad has a single member in the pool, so it constrains nothing.
-    squads = [Squad(member_ids=["ghost", "m0"]), Squad(member_ids=["m0", "m1"])]
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)], squads=squads)
+def test_forcing_two_members_into_a_single_seat_conflicts(solver):
+    members = [_person("m0"), _person("m1"), _person("m2")]
+    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)], included_person_ids=["m0", "m1"])
     assert _infeasibility(solver, project, members) == [
         PhaseConflict(
             phase_id=None,
-            reason=InfeasibilityReason.SQUAD_CONFLICT,
+            reason=InfeasibilityReason.FORCED_MEMBER_CONFLICT,
             required_fte=1.0,
             need_fte=1.0,
-            squad_indices=[1],
-            forced_person_ids=[],
+            forced_person_ids=["m0", "m1"],
         )
     ]
 
 
-def test_squad_conflict_is_attributed_to_its_phase(solver):
+def test_forced_member_conflict_is_attributed_to_its_phase(solver):
     members = [_person("m0"), _person("m1")]
     phases = [
         ProjectPhase(id="build", skill_requirements=[_req("python", 0, fte=2.0)]),
         ProjectPhase(id="run", skill_requirements=[_req("python", 0)]),
     ]
-    project = ProjectInput(id="proj", phases=phases, squads=[Squad(member_ids=["m0", "m1"])])
+    project = ProjectInput(id="proj", phases=phases, included_person_ids=["m0", "m1"])
     conflicts = _infeasibility(solver, project, members)
-    assert [(c.phase_id, c.reason, c.squad_indices) for c in conflicts] == [
-        ("run", InfeasibilityReason.SQUAD_CONFLICT, [0])
+    assert [(c.phase_id, c.reason, c.forced_person_ids) for c in conflicts] == [
+        ("run", InfeasibilityReason.FORCED_MEMBER_CONFLICT, ["m0", "m1"])
     ]
 
 
@@ -209,7 +205,6 @@ def test_forced_member_qualifying_for_no_skill_conflicts(solver):
             reason=InfeasibilityReason.FORCED_MEMBER_CONFLICT,
             required_fte=1.0,
             need_fte=1.0,
-            squad_indices=[],
             forced_person_ids=["forced"],
         )
     ]
@@ -227,25 +222,8 @@ def test_forced_part_timer_on_a_single_seat_conflicts(solver):
     ]
 
 
-def test_squad_and_forced_member_conflict(solver):
-    # One full-time seat: the forced part-timer can't fill it, and "t", who could, is
-    # tied to "u", who can't share the seat. Only lifting both frees "t" for it.
-    people = [_person("forced", availability=0.4), _person("t"), _person("u")]
-    project = ProjectInput(
-        id="proj",
-        skill_requirements=[_req("python", 0)],
-        included_person_ids=["forced"],
-        squads=[Squad(member_ids=["t", "u"])],
-        date_ranges=[SPAN],
-    )
-    conflicts = _infeasibility(solver, project, people)
-    assert [(c.reason, c.squad_indices, c.forced_person_ids) for c in conflicts] == [
-        (InfeasibilityReason.SQUAD_AND_FORCED_MEMBER_CONFLICT, [0], ["forced"])
-    ]
-
-
 def test_infeasibility_is_still_a_value_error_with_a_readable_message(solver):
     members = [_person("m0"), _person("m1")]
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)], squads=[Squad(member_ids=["m0", "m1"])])
-    with pytest.raises(ValueError, match="squad_conflict"):
+    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)], included_person_ids=["m0", "m1"])
+    with pytest.raises(ValueError, match="forced_member_conflict"):
         solver.solve_pool(project, members, PERF_ONLY)
