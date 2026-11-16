@@ -34,7 +34,6 @@ def _create_project(client, headers, **overrides):
         ],
         "excluded_person_ids": ["p-carol"],
         "included_person_ids": ["p-alice"],
-        "squads": [{"member_ids": ["p-alice", "p-bob"]}],
         "date_ranges": [{"start": "2026-07-01", "end": "2026-09-30"}],
         "phases": [],
         **overrides,
@@ -61,7 +60,6 @@ _CSV_FIELDNAMES = (
     "skill_requirements",
     "excluded_person_ids",
     "included_person_ids",
-    "squads",
     "date_ranges",
     "phases",
     "start_window",
@@ -78,7 +76,6 @@ def _row_values(**overrides):
         "skill_requirements": json.dumps([ONE_FTE_NEED]),
         "excluded_person_ids": "[]",
         "included_person_ids": "[]",
-        "squads": "[]",
         "date_ranges": "[]",
         "phases": "[]",
         "start_window": "",
@@ -240,7 +237,7 @@ def test_export_round_trips_through_import(client, org_headers):
         f"/api/v1/projects/{atlas['id']}", headers=other_org_headers
     ).json()
     assert imported_atlas["name"] == "Atlas Migration"
-    assert imported_atlas["squads"] == [{"member_ids": ["p-alice", "p-bob"]}]
+    assert imported_atlas["included_person_ids"] == ["p-alice"]
     assert imported_atlas["skill_requirements"] == atlas["skill_requirements"]
     imported_nova = client.get(
         f"/api/v1/projects/{nova['id']}", headers=other_org_headers
@@ -284,7 +281,7 @@ def test_import_accepts_legacy_csv_without_completed_at_column(client, org_heade
     skills_cell = '"[{""id"": ""general"", ""min_level"": 0, ""fte"": 1}]"'
     csv_text = (
         f"{','.join(legacy_fieldnames)}\n"
-        f"proj-1,Nova Redesign,,medium,{skills_cell},[],[],[],[],[]\n"
+        f"proj-1,Nova Redesign,,medium,{skills_cell},[],[],[],[]\n"
     )
 
     response = _upload_csv(client, org_headers, csv_text)
@@ -378,3 +375,16 @@ def test_import_ignores_a_legacy_n_slots_column(client, org_headers):
     assert response.status_code == 200
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert "n_slots" not in project
+
+
+def test_import_ignores_a_legacy_squads_column(client, org_headers):
+    header = ",".join([*_CSV_FIELDNAMES, "squads"])
+    squads_cell = '"[{""member_ids"": [""p-alice"", ""p-bob""]}]"'
+    csv_text = f"{header}\n{_row_values()},{squads_cell}\n"
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    assert response.json() == {"created": ["proj-1"], "skipped": []}
+    project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
+    assert "squads" not in project
