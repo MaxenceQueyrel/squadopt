@@ -5,7 +5,6 @@ import {
   PersonMultiSelect,
   PhasesEditor,
   SkillReqsEditor,
-  SquadsEditor,
 } from "@/components/editors/listEditors";
 import { errorMessage } from "@/services/api";
 import type { DateRange, Person, Priority, Project } from "@/types";
@@ -21,7 +20,6 @@ function emptyDraft(): ProjectDraft {
     skill_requirements: [],
     excluded_person_ids: [],
     included_person_ids: [],
-    squads: [],
     date_ranges: [],
     phases: [],
     start_window: null,
@@ -221,10 +219,6 @@ export function ProjectForm({
           onChange={(v) => set("excluded_person_ids", v)}
           people={people}
         />
-      </Field>
-
-      <Field label="Squads" hint="Groups co-selected all-or-nothing">
-        <SquadsEditor value={draft.squads} onChange={(v) => set("squads", v)} people={people} />
       </Field>
 
       {error && (

@@ -168,7 +168,10 @@ export function PersonForm({
         />
       </Field>
 
-      <Field label="Affinities" hint="Pairwise rapport with colleagues, from -5 to +5">
+      <Field
+        label="Affinities"
+        hint="Pairwise rapport with colleagues, from -5 to +5; raise it to keep people staffed together"
+      >
         <AffinitiesEditor
           value={draft.affinities}
           onChange={(v) => set("affinities", v)}

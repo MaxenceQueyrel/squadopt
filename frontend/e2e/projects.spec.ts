@@ -9,7 +9,7 @@ import {
 } from "./helpers";
 
 const PROJECT_CSV_HEADER =
-  "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,squads,date_ranges,phases";
+  "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,date_ranges,phases";
 
 const PEOPLE_CSV_HEADER =
   "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
