@@ -13,7 +13,6 @@ from optimizer.models import (
     Seniority,
     SkillLevel,
     SkillRequirement,
-    Squad,
 )
 
 SPAN = DateRange(start=date(2026, 1, 5), end=date(2026, 1, 25))
@@ -251,58 +250,19 @@ def test_handover_keeps_same_person_across_phases(solver):
     assert stage1.keys() == stage2.keys() and len(stage1) == 1  # team kept stable across phases
 
 
-def test_squad_pulls_in_partner(solver):
-    # On skill alone a DS project would pick the two best data scientists and
-    # never the developer; a squad tying the developer to a selected member
-    # forces the pair to move together.
-    def person(person_id, ds_level):
-        skills = [SkillLevel(id="ds", level=ds_level)]
-        return PersonInput(id=person_id, seniority=Seniority.SENIOR, skills=skills)
-
-    candidates = [person("ds_a", 5.0), person("ds_b", 4.5), person("dev", 3.0)]
-    base = ProjectInput(
-        id="proj-test",
-        skill_requirements=[SkillRequirement(id="ds", min_level=3.0, fte=2.0, max_people=3)],
-        included_person_ids=["ds_a"],
-    )
-
-    without = solver.solve(base, candidates, PERF_ONLY)
-    assert _allocations(without) == {"ds_a": 1.0, "ds_b": 1.0}  # developer skipped
-
-    with_squad = base.model_copy(update={"squads": [Squad(member_ids=["ds_a", "dev"])]})
-    result = solver.solve(with_squad, candidates, PERF_ONLY)
-    # The squad drags the developer in, but only at the minimum share: the FTE
-    # still goes to the better data scientists.
-    assert _allocations(result) == pytest.approx({"ds_a": 1.0, "dev": 0.2, "ds_b": 0.8})
-
-
 def _generalists(*ids):
     # min_level 0 requirements accept them although they list no skill.
     return [PersonInput(id=person_id, seniority=Seniority.SENIOR) for person_id in ids]
 
 
-def test_squad_seated_together_when_max_people_allows(solver):
-    project = ProjectInput(
-        id="proj-test",
-        skill_requirements=[_python(min_level=0, max_people=2)],
-        included_person_ids=["a"],
-        squads=[Squad(member_ids=["a", "b"])],
-    )
-    result = solver.solve(project, _generalists("a", "b"), AssignmentWeights())
-    assert _allocations(result).keys() == {"a", "b"}
-    assert sum(_allocations(result).values()) == pytest.approx(1.0)
-
-
-def _unseatable_squad_project():
-    # A squad of two on a need that seats a single person, and it's the only staffing option.
-    project = ProjectInput(
-        id="proj-test", skill_requirements=[_python(min_level=0)], squads=[Squad(member_ids=["a", "b"])]
-    )
+def _unseatable_forced_project():
+    # Two forced members on a need that seats a single person.
+    project = ProjectInput(id="proj-test", skill_requirements=[_python(min_level=0)], included_person_ids=["a", "b"])
     return project, _generalists("a", "b")
 
 
-def test_unsatisfiable_squad_raises(solver):
-    project, candidates = _unseatable_squad_project()
+def test_unseatable_forced_members_raise(solver):
+    project, candidates = _unseatable_forced_project()
     with pytest.raises(InfeasibleAssignmentError):
         solver.solve(project, candidates, AssignmentWeights())
 
@@ -367,13 +327,12 @@ def test_pool_teams_differ_by_at_least_min_difference(solver, python_project, py
             assert len(a - b) >= 2  # fully disjoint for a team of two
 
 
-def test_pool_alternatives_respect_squads_inclusions_and_exclusions(solver, python_project, pythonistas):
+def test_pool_alternatives_respect_inclusions_and_exclusions(solver, python_project, pythonistas):
     project = python_project.model_copy(
         update={
             "skill_requirements": [_python(fte=3.0, min_level=1)],
             "included_person_ids": ["py3.0"],
             "excluded_person_ids": ["py5.0"],
-            "squads": [Squad(member_ids=["py4.5", "py4.0"])],
         }
     )
     pool = solver.solve_pool(project, pythonistas, AssignmentWeights(), n_alternatives=5, min_difference=1)
@@ -383,7 +342,6 @@ def test_pool_alternatives_respect_squads_inclusions_and_exclusions(solver, pyth
         assert len(selected) == 3
         assert "py3.0" in selected
         assert "py5.0" not in selected
-        assert ("py4.5" in selected) == ("py4.0" in selected)
 
 
 def test_pool_truncates_when_candidates_run_out(solver, python_project, pythonistas):
@@ -406,7 +364,7 @@ def test_pool_without_alternatives_matches_solve(solver, python_project, pythoni
 
 
 def test_pool_first_solve_still_raises_when_infeasible(solver):
-    project, candidates = _unseatable_squad_project()
+    project, candidates = _unseatable_forced_project()
     with pytest.raises(InfeasibleAssignmentError):
         solver.solve_pool(project, candidates, AssignmentWeights())
 

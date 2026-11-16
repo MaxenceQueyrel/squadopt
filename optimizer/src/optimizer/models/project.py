@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field
 
 from optimizer.models.date_range import DateRange
 from optimizer.models.skill import SkillRequirement
-from optimizer.models.squad import Squad
 
 
 class ProjectPhase(BaseModel):
@@ -24,9 +23,6 @@ class ProjectInput(BaseModel):
         default=[], description="Person IDs that must not be assigned to the project."
     )
     included_person_ids: list[str] = Field(default=[], description="Person IDs that must be assigned to the project.")
-    squads: list[Squad] = Field(
-        default=[], description="Groups of people co-selected together; members unavailable in a phase are skipped."
-    )
     date_ranges: list[DateRange] = Field(
         default=[],
         description="Calendar spans during which the project runs. Empty means no date constraint.",
