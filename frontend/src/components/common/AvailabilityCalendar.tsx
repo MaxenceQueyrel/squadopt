@@ -9,6 +9,12 @@ export interface TimelineRow {
   label: string;
   href?: string;
   segments: AvailabilitySegment[];
+  capacity: number; // a day at or above it is fully free and can't be selected
+}
+
+export interface CalendarSelection {
+  rowId: string;
+  day: string;
 }
 
 export interface TimelineOverlay {
@@ -68,11 +74,15 @@ export function AvailabilityCalendar({
   end,
   rows,
   overlays,
+  selection,
+  onSelect,
 }: {
   start: string;
   end: string;
   rows: TimelineRow[];
   overlays: TimelineOverlay[];
+  selection: CalendarSelection | null;
+  onSelect: (selection: CalendarSelection) => void;
 }) {
   const days = useMemo(() => (start <= end ? enumerateDays(start, end) : []), [start, end]);
   const dayIndex = useMemo(() => new Map(days.map((d, i) => [d, i])), [days]);
@@ -185,23 +195,35 @@ export function AvailabilityCalendar({
                 const ratio = ratios[i];
                 const date = parseISODate(day);
                 const isWeekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
+                const title =
+                  ratio === null ? `${day}: no data` : `${day}: ${(ratio * 100).toFixed(0)}%`;
+                const cellStyle = {
+                  gridColumn: i + 2,
+                  gridRow: rowIdx + 2,
+                  margin: 2,
+                  borderRadius: 3,
+                  background:
+                    ratio === null ? (isWeekend ? colors.light : colors.border) : ratioColor(ratio),
+                };
+                if (ratio === null || ratio >= row.capacity) {
+                  return <div key={day} title={title} style={cellStyle} />;
+                }
+                const isSelected = selection?.rowId === row.id && selection.day === day;
                 return (
-                  <div
+                  <button
                     key={day}
-                    title={
-                      ratio === null ? `${day}: no data` : `${day}: ${(ratio * 100).toFixed(0)}%`
-                    }
+                    type="button"
+                    title={title}
+                    aria-label={`${row.label}, ${title}`}
+                    aria-pressed={isSelected}
+                    onClick={() => onSelect({ rowId: row.id, day })}
                     style={{
-                      gridColumn: i + 2,
-                      gridRow: rowIdx + 2,
-                      margin: 2,
-                      borderRadius: 3,
-                      background:
-                        ratio === null
-                          ? isWeekend
-                            ? colors.light
-                            : colors.border
-                          : ratioColor(ratio),
+                      ...cellStyle,
+                      padding: 0,
+                      border: "none",
+                      cursor: "pointer",
+                      outline: isSelected ? `2px solid ${colors.text}` : undefined,
+                      outlineOffset: 1,
                     }}
                   />
                 );

@@ -308,7 +308,7 @@ export default function PersonDetailPage() {
 
       <TabPanel group="person" value="availability" active={tab === "availability"}>
         <Columns
-          main={<WeeklyAvailability person={person} />}
+          main={<WeeklyAvailability person={person} assignments={assignments} />}
           side={
             <SectionCard title="Time off & exceptions">
               <p style={{ margin: 0, fontSize: "0.88rem", color: colors.muted }}>

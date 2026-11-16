@@ -8,8 +8,9 @@ import {
   mondayOf,
 } from "@/components/common/dates";
 import { Card, colors, Field, fonts, inputStyle, Tabs } from "@/components/common/ui";
+import { CommitmentBreakdown } from "@/components/people/CommitmentBreakdown";
 import { errorMessage, peopleApi } from "@/services/api";
-import type { AvailabilitySegment, Person } from "@/types";
+import type { Assignment, AvailabilitySegment, Person } from "@/types";
 
 type RangeChoice = "1m" | "3m" | "6m" | "custom";
 export type WeekStatus = "free" | "partly" | "booked";
@@ -43,6 +44,7 @@ interface Week {
   start: string;
   status: WeekStatus;
   free: number; // share of the contracted capacity left, 0–1
+  average: number; // FTE left, averaged over the week's days
 }
 
 export function summarizeWeek(
@@ -57,7 +59,7 @@ export function summarizeWeek(
   let status: WeekStatus = "partly";
   if (ratios.every((r) => r >= capacity)) status = "free";
   else if (ratios.every((r) => r === 0)) status = "booked";
-  return { start, status, free: Math.min(average / capacity, 1) };
+  return { start, status, free: Math.min(average / capacity, 1), average };
 }
 
 function pluralWeeks(count: number): string {
@@ -108,12 +110,19 @@ function visibleRange(
 }
 
 /** The person's availability as one cell per week (Monday to Sunday) over a chosen range. */
-export function WeeklyAvailability({ person }: { person: Person }) {
+export function WeeklyAvailability({
+  person,
+  assignments,
+}: {
+  person: Person;
+  assignments: Assignment[];
+}) {
   const headingId = useId();
   const [choice, setChoice] = useState<RangeChoice>("3m");
   const [custom, setCustom] = useState(() => ({ from: isoToday(), to: addDays(isoToday(), 90) }));
   const [segments, setSegments] = useState<AvailabilitySegment[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
 
   const thisWeek = mondayOf(isoToday());
   const range = visibleRange(choice, custom, thisWeek);
@@ -142,6 +151,7 @@ export function WeeklyAvailability({ person }: { person: Person }) {
     ? weekStarts.map((w) => summarizeWeek(w, segments, person.base_capacity))
     : [];
   const labels = monthLabels(weeks);
+  const selected = weeks.find((w) => w.start === selectedWeek);
 
   return (
     <section aria-labelledby={headingId}>
@@ -167,6 +177,7 @@ export function WeeklyAvailability({ person }: { person: Person }) {
             onChange={(value) => {
               if (value === "custom") setCustom({ from: start, to: end });
               setChoice(value as RangeChoice);
+              setSelectedWeek(null);
             }}
           />
         </div>
@@ -177,7 +188,10 @@ export function WeeklyAvailability({ person }: { person: Person }) {
               <input
                 type="date"
                 value={custom.from}
-                onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
+                onChange={(e) => {
+                  setCustom((c) => ({ ...c, from: e.target.value }));
+                  setSelectedWeek(null);
+                }}
                 style={inputStyle}
               />
             </Field>
@@ -185,7 +199,10 @@ export function WeeklyAvailability({ person }: { person: Person }) {
               <input
                 type="date"
                 value={custom.to}
-                onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
+                onChange={(e) => {
+                  setCustom((c) => ({ ...c, to: e.target.value }));
+                  setSelectedWeek(null);
+                }}
                 style={inputStyle}
               />
             </Field>
@@ -233,19 +250,40 @@ export function WeeklyAvailability({ person }: { person: Person }) {
                     week.status === "partly"
                       ? `Week of ${week.start}: ${label.toLowerCase()}, ${Math.round(week.free * 100)}% free`
                       : `Week of ${week.start}: ${label.toLowerCase()}`;
+                  const cellStyle = {
+                    gridRow: 2,
+                    gridColumn: i + 1,
+                    height: 38,
+                    borderRadius: "var(--radius-sm)",
+                    background: color,
+                    border: `2px solid ${week.start === thisWeek ? colors.text : "transparent"}`,
+                  };
+                  if (week.status === "free") {
+                    return (
+                      <div
+                        key={week.start}
+                        role="img"
+                        aria-label={title}
+                        title={title}
+                        style={cellStyle}
+                      />
+                    );
+                  }
+                  const isSelected = week.start === selectedWeek;
                   return (
-                    <div
+                    <button
                       key={week.start}
-                      role="img"
+                      type="button"
                       aria-label={title}
+                      aria-pressed={isSelected}
                       title={title}
+                      onClick={() => setSelectedWeek(isSelected ? null : week.start)}
                       style={{
-                        gridRow: 2,
-                        gridColumn: i + 1,
-                        height: 38,
-                        borderRadius: "var(--radius-sm)",
-                        background: color,
-                        border: `2px solid ${week.start === thisWeek ? colors.text : "transparent"}`,
+                        ...cellStyle,
+                        padding: 0,
+                        cursor: "pointer",
+                        outline: isSelected ? `2px solid ${colors.primary}` : undefined,
+                        outlineOffset: 2,
                       }}
                     />
                   );
@@ -277,6 +315,15 @@ export function WeeklyAvailability({ person }: { person: Person }) {
               {summarySentence(weeks)}
             </p>
             <Legend />
+            {selected && (
+              <CommitmentBreakdown
+                person={person}
+                assignments={assignments}
+                range={{ start: selected.start, end: addDays(selected.start, 6) }}
+                freeFte={selected.average}
+                onClose={() => setSelectedWeek(null)}
+              />
+            )}
           </>
         )}
       </Card>
