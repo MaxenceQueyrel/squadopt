@@ -122,6 +122,48 @@ test("a new project starts with one phase and adding a phase keeps the first one
   await expect(page.getByTitle("build: 2027-02-01 → 2027-02-28")).toBeVisible();
 });
 
+test("a skill picked in a phase is hidden from its other rows but offered in other phases", async ({
+  page,
+}) => {
+  const suffix = uniqueSuffix();
+  const alpha = `alpha-${suffix}`;
+  const beta = `beta-${suffix}`;
+  const suggestion = (skill: string) => page.getByRole("button", { name: skill, exact: true });
+
+  // A saved project puts both skills in the catalog the pickers suggest from.
+  await page.goto("/projects");
+  await page.getByRole("button", { name: "New project" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(`Skill Catalog ${suffix}`);
+  await addSkillRequirement(page, { id: alpha });
+  await addSkillRequirement(page, { id: beta });
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("heading", { name: `Skill Catalog ${suffix}` }).waitFor();
+
+  await page.getByRole("button", { name: "New project" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(`No Duplicates ${suffix}`);
+  await addSkillRequirement(page, { id: alpha });
+  await page.getByRole("button").filter({ hasText: "+ Add requirement" }).last().click();
+  const skillIds = page.getByPlaceholder("skill id");
+  await skillIds.last().fill(suffix);
+  await expect(suggestion(beta)).toBeVisible();
+  await expect(suggestion(alpha)).toHaveCount(0);
+  await skillIds.first().click();
+  await expect(suggestion(alpha)).toBeVisible();
+
+  await skillIds.last().fill(alpha);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    `Phase "main" requires skill "${alpha}" more than once.`,
+  );
+  await skillIds.last().fill(beta);
+
+  await page.getByRole("button").filter({ hasText: "+ Add phase" }).click();
+  await page.getByRole("button").filter({ hasText: "+ Add requirement" }).last().click();
+  await skillIds.last().fill(suffix);
+  await expect(suggestion(alpha)).toBeVisible();
+  await expect(suggestion(beta)).toBeVisible();
+});
+
 test("assigning a person from the project workspace shows the roster entry", async ({ page }) => {
   const suffix = uniqueSuffix();
   const projectName = `Platform Rewrite ${suffix}`;

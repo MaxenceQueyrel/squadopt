@@ -62,6 +62,16 @@ export function ProjectForm({
       setError("Give every phase a different id.");
       return;
     }
+    // The skill pickers hide skills already chosen in the phase, but a duplicate can still be
+    // typed by hand.
+    for (const phase of draft.phases) {
+      const skillIds = phase.skill_requirements.map((req) => req.id.trim());
+      const repeated = skillIds.find((id, i) => skillIds.indexOf(id) !== i);
+      if (repeated) {
+        setError(`Phase "${phase.id.trim()}" requires skill "${repeated}" more than once.`);
+        return;
+      }
+    }
     if (draft.start_window && (!draft.start_window.start || !draft.start_window.end)) {
       setError("Fill in both earliest and latest start, or leave both empty.");
       return;
