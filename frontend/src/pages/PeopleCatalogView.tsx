@@ -1,6 +1,6 @@
 import { CircleAlert, Pencil, Plus, Trash } from "lucide-react";
 import { useState } from "react";
-import { Button, Card, colors, Menu, type MenuItem } from "@/components/common/ui";
+import { Button, Card, colors, Menu, type MenuItem, SearchInput } from "@/components/common/ui";
 import { type CatalogItem, type CatalogKind, CatalogModal } from "@/components/people/CatalogModal";
 import { formatHeadcount } from "@/components/projects/staffing";
 import { errorMessage, rolesApi, skillsApi } from "@/services/api";
@@ -151,6 +151,15 @@ function CatalogSection({
   onDelete: (id: string, usedBy: number) => void;
 }) {
   const noun = kind === "role" ? "Role" : "Skill";
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const visible = needle
+    ? items.filter(
+        (item) =>
+          item.id.toLowerCase().includes(needle) ||
+          item.description?.toLowerCase().includes(needle),
+      )
+    : items;
   return (
     <Card style={{ padding: "1.25rem 1.5rem" }}>
       <div
@@ -166,7 +175,7 @@ function CatalogSection({
           <h3 style={{ margin: 0 }}>
             {title}{" "}
             <span className="mono" style={{ color: colors.muted, fontSize: "0.9rem" }}>
-              {items.length}
+              {needle ? `${visible.length} of ${items.length}` : items.length}
             </span>
           </h3>
           <p style={{ margin: "0.3rem 0 0", color: colors.muted, fontSize: "0.88rem" }}>
@@ -179,8 +188,20 @@ function CatalogSection({
           </Button>
         )}
       </div>
+      {items.length > 0 && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={`Search ${kind}s`}
+          style={{ marginBottom: "0.75rem" }}
+        />
+      )}
       {items.length === 0 ? (
         <p style={{ margin: 0, color: colors.muted, fontSize: "0.9rem" }}>No {kind}s yet.</p>
+      ) : visible.length === 0 ? (
+        <p style={{ margin: 0, color: colors.muted, fontSize: "0.9rem" }}>
+          No {kind}s match "{query.trim()}".
+        </p>
       ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
@@ -193,7 +214,7 @@ function CatalogSection({
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
+              {visible.map((item) => {
                 const usedBy = usage(item.id);
                 const actions: MenuItem[] = [];
                 if (canWrite)

@@ -122,6 +122,85 @@ test("a skill nobody has shows as a coverage gap and is described on the Roles &
   await expect(page.getByRole("row", { name: skillId })).toContainText("Spotting staffing gaps");
 });
 
+test("searching the Roles and Skill coverage cards narrows their rows", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const roleA = `search-role-a-${suffix}`;
+  const roleB = `search-role-b-${suffix}`;
+  const skillA = `search-skill-a-${suffix}`;
+  const skillB = `search-skill-b-${suffix}`;
+
+  await page.goto("/people");
+  for (const [kind, id] of [
+    ["role", roleA],
+    ["role", roleB],
+    ["skill", skillA],
+    ["skill", skillB],
+  ]) {
+    await page.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
+    await page.getByLabel(kind === "role" ? "Role id" : "Skill id").fill(id);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(id, { exact: true })).toBeVisible();
+  }
+
+  const roleSearch = page.getByRole("searchbox", { name: "Search roles" });
+  await roleSearch.fill(`ROLE-A-${suffix}`);
+  await expect(page.getByText(roleA, { exact: true })).toBeVisible();
+  await expect(page.getByText(roleB, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(skillB, { exact: true })).toBeVisible();
+
+  const skillSearch = page.getByRole("searchbox", { name: "Search skills" });
+  await skillSearch.fill(`skill-b-${suffix}`);
+  await expect(page.getByText(skillB, { exact: true })).toBeVisible();
+  await expect(page.getByText(skillA, { exact: true })).toHaveCount(0);
+
+  await roleSearch.fill(`no-such-role-${suffix}`);
+  await expect(page.getByText(`No roles match "no-such-role-${suffix}".`)).toBeVisible();
+  await skillSearch.fill(`no-such-skill-${suffix}`);
+  await expect(page.getByText(`No skills match "no-such-skill-${suffix}".`)).toBeVisible();
+
+  await roleSearch.fill("");
+  await expect(page.getByText(roleA, { exact: true })).toBeVisible();
+  await expect(page.getByText(roleB, { exact: true })).toBeVisible();
+});
+
+test("searching the Roles & skills tables matches ids and descriptions", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const described = `catalog-search-a-${suffix}`;
+  const other = `catalog-search-b-${suffix}`;
+
+  await page.goto("/people/catalog");
+  for (const [id, description] of [
+    [described, `Kubernetes wrangling ${suffix}`],
+    [other, ""],
+  ]) {
+    await page.getByRole("button", { name: "Add skill", exact: true }).click();
+    await page.getByLabel("Skill id").fill(id);
+    await page.getByLabel("Description").fill(description);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("row", { name: id })).toBeVisible();
+  }
+
+  const search = page.getByRole("searchbox", { name: "Search skills" });
+  await search.fill(`kubernetes WRANGLING ${suffix}`);
+  await expect(page.getByRole("row", { name: described })).toBeVisible();
+  await expect(page.getByRole("row", { name: other })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^Skills 1 of \d+$/ })).toBeVisible();
+
+  await search.fill(`search-b-${suffix}`);
+  await expect(page.getByRole("row", { name: other })).toBeVisible();
+  await expect(page.getByRole("row", { name: described })).toHaveCount(0);
+
+  await page.getByRole("button", { name: `Actions for skill ${other}` }).click();
+  await page.getByRole("menuitem", { name: "Edit description" }).click();
+  await page.getByLabel("Description").fill("Edited while filtered");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("row", { name: other })).toContainText("Edited while filtered");
+
+  await page.getByRole("searchbox", { name: "Search roles" }).fill(`no-such-role-${suffix}`);
+  await expect(page.getByText(`No roles match "no-such-role-${suffix}".`)).toBeVisible();
+  await expect(page.getByRole("row", { name: other })).toBeVisible();
+});
+
 test("editing an availability window on the detail page updates the weekly strip", async ({
   page,
 }) => {
