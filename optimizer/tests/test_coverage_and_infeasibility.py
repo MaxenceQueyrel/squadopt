@@ -169,61 +169,37 @@ def _infeasibility(solver, project, people):
     return exc_info.value.conflicts
 
 
-def test_forcing_two_members_into_a_single_seat_conflicts(solver):
-    members = [_person("m0"), _person("m1"), _person("m2")]
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)], included_person_ids=["m0", "m1"])
-    assert _infeasibility(solver, project, members) == [
-        PhaseConflict(
-            phase_id=None,
-            reason=InfeasibilityReason.FORCED_MEMBER_CONFLICT,
-            required_fte=1.0,
-            need_fte=1.0,
-            forced_person_ids=["m0", "m1"],
-        )
+@pytest.fixture
+def inflated_need(monkeypatch):
+    # The need is what the pool can staff, so no real input is infeasible. Asking one step
+    # beyond it, for the requirements of exactly 1 FTE, reaches the diagnosis safety net.
+    staffable_steps = PuLPTeamAssignmentSolver._staffable_steps
+
+    def inflated(self, project, candidates):
+        extra = 1 if sum(req.fte for req in project.skill_requirements) == 1.0 else 0
+        return staffable_steps(self, project, candidates) + extra
+
+    monkeypatch.setattr(PuLPTeamAssignmentSolver, "_staffable_steps", inflated)
+
+
+def test_unreachable_need_is_reported(solver, inflated_need):
+    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)])
+    assert _infeasibility(solver, project, [_person("m0"), _person("m1")]) == [
+        PhaseConflict(phase_id=None, reason=InfeasibilityReason.FTE_NOT_REACHABLE, required_fte=1.0, need_fte=1.2)
     ]
 
 
-def test_forced_member_conflict_is_attributed_to_its_phase(solver):
-    members = [_person("m0"), _person("m1")]
+def test_unreachable_need_is_attributed_to_its_phase(solver, inflated_need):
     phases = [
         ProjectPhase(id="build", skill_requirements=[_req("python", 0, fte=2.0)]),
         ProjectPhase(id="run", skill_requirements=[_req("python", 0)]),
     ]
-    project = ProjectInput(id="proj", phases=phases, included_person_ids=["m0", "m1"])
-    conflicts = _infeasibility(solver, project, members)
-    assert [(c.phase_id, c.reason, c.forced_person_ids) for c in conflicts] == [
-        ("run", InfeasibilityReason.FORCED_MEMBER_CONFLICT, ["m0", "m1"])
-    ]
+    project = ProjectInput(id="proj", phases=phases)
+    conflicts = _infeasibility(solver, project, [_person("m0"), _person("m1")])
+    assert [(c.phase_id, c.reason) for c in conflicts] == [("run", InfeasibilityReason.FTE_NOT_REACHABLE)]
 
 
-def test_forced_member_qualifying_for_no_skill_conflicts(solver):
-    people = [_person("forced", python=2), _person("other", python=4)]
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 3)], included_person_ids=["forced"])
-    assert _infeasibility(solver, project, people) == [
-        PhaseConflict(
-            phase_id=None,
-            reason=InfeasibilityReason.FORCED_MEMBER_CONFLICT,
-            required_fte=1.0,
-            need_fte=1.0,
-            forced_person_ids=["forced"],
-        )
-    ]
-
-
-def test_forced_part_timer_on_a_single_seat_conflicts(solver):
-    # The 1-FTE need seats one person, and the forced one can only give 0.4 of it.
-    people = [_person("forced", availability=0.4, python=4), _person("other", python=4)]
-    project = ProjectInput(
-        id="proj", skill_requirements=[_req("python", 3)], included_person_ids=["forced"], date_ranges=[SPAN]
-    )
-    conflicts = _infeasibility(solver, project, people)
-    assert [(c.reason, c.forced_person_ids) for c in conflicts] == [
-        (InfeasibilityReason.FORCED_MEMBER_CONFLICT, ["forced"])
-    ]
-
-
-def test_infeasibility_is_still_a_value_error_with_a_readable_message(solver):
-    members = [_person("m0"), _person("m1")]
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)], included_person_ids=["m0", "m1"])
-    with pytest.raises(ValueError, match="forced_member_conflict"):
-        solver.solve_pool(project, members, PERF_ONLY)
+def test_infeasibility_is_still_a_value_error_with_a_readable_message(solver, inflated_need):
+    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)])
+    with pytest.raises(ValueError, match="fte_not_reachable"):
+        solver.solve_pool(project, [_person("m0"), _person("m1")], PERF_ONLY)

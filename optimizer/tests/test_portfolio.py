@@ -3,12 +3,10 @@ from datetime import date, timedelta
 import pytest
 from optimizer.adapters.pulp_solver import PuLPTeamAssignmentSolver
 from optimizer.availability import base_availability_ratio, daily_availability
-from optimizer.domain.solver import InfeasibleAssignmentError, InfeasiblePortfolioError
 from optimizer.models import (
     AssignmentWeights,
     AvailabilityWindow,
     DateRange,
-    InfeasibilityReason,
     PersonInput,
     PortfolioProject,
     ProjectInput,
@@ -40,13 +38,12 @@ def _person(person_id, availability=1.0, **skills):
     )
 
 
-def _project(project_id, skill_id, fte=1.0, date_range=SPAN, priority=ProjectPriority.MEDIUM, **kwargs):
+def _project(project_id, skill_id, fte=1.0, date_range=SPAN, priority=ProjectPriority.MEDIUM):
     return PortfolioProject(
         id=project_id,
         skill_requirements=[SkillRequirement(id=skill_id, min_level=3, fte=fte)],
         date_ranges=[date_range] if date_range else [],
         priority=priority,
-        **kwargs,
     )
 
 
@@ -236,7 +233,6 @@ def test_single_project_matches_solve(solver):
                 date_range=DateRange(start=date(2026, 1, 15), end=SPAN.end),
             ),
         ],
-        included_person_ids=["c"],
     )
     people = [
         _person("a", python=5, react=2).model_copy(update={"affinities": {"b": 3.0}}),
@@ -248,55 +244,3 @@ def test_single_project_matches_solve(solver):
     (team,) = solver.solve_portfolio([PortfolioProject(**project.model_dump())], people, weights).results
 
     assert team == solver.solve(project, people, weights)
-
-
-def test_forced_person_in_overlapping_projects_that_cannot_fit(solver):
-    projects = [
-        _project("a", "python", included_person_ids=["expert"]),
-        _project("b", "python", included_person_ids=["expert"]),
-    ]
-    people = [_person("expert", availability=0.2, python=5), _person("dev", python=3)]
-
-    with pytest.raises(InfeasibleAssignmentError) as exc_info:
-        solver.solve_portfolio(projects, people, PERF_ONLY)
-
-    error = exc_info.value
-    assert isinstance(error, InfeasiblePortfolioError)
-    assert [e.project_id for e in error.project_errors] == ["a", "b"]
-    for project_error in error.project_errors:
-        (conflict,) = project_error.conflicts
-        assert conflict.reason == InfeasibilityReason.CROSS_PROJECT_FORCED_CONFLICT
-        assert conflict.person_id == "expert"
-        assert conflict.project_ids == ["a", "b"]
-        assert conflict.forced_person_ids == ["expert"]
-        assert conflict.period == SPAN
-    assert (error.project_id, error.conflicts) == ("a", error.project_errors[0].conflicts)
-
-
-def test_forced_person_in_overlapping_projects_that_fit(solver):
-    projects = [
-        _project("a", "python", included_person_ids=["expert"]),
-        _project("b", "python", included_person_ids=["expert"]),
-    ]
-    people = [_person("expert", availability=0.4, python=5), _person("dev", python=3)]
-
-    result = solver.solve_portfolio(projects, people, PERF_ONLY)
-
-    assert all("expert" in _staffed(team) for team in result.results)
-    _assert_within_availability(projects, people, result)
-
-
-def test_project_infeasible_on_its_own_is_reported_alone(solver):
-    projects = [
-        _project("fine", "python"),
-        _project("broken", "python", included_person_ids=["designer"]),
-    ]
-    people = [_person("expert", python=5), _person("designer", figma=5)]
-
-    with pytest.raises(InfeasiblePortfolioError) as exc_info:
-        solver.solve_portfolio(projects, people, PERF_ONLY)
-
-    (project_error,) = exc_info.value.project_errors
-    assert project_error.project_id == "broken"
-    assert [c.reason for c in project_error.conflicts] == [InfeasibilityReason.FORCED_MEMBER_CONFLICT]
-    assert project_error.conflicts[0].forced_person_ids == ["designer"]

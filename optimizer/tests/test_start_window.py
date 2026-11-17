@@ -162,31 +162,37 @@ def test_equal_scores_pick_the_earliest_start(solver):
     assert scan.best_start == WEEK_1.start
 
 
-def _forced_pair(prefix, vacations):
-    # Two forced members can't both be seated on a 1-FTE need, which seats a single person.
-    return [_person(f"{prefix}{i}", vacations=vacations) for i in range(2)]
+def _unreachable_from(monkeypatch, starts):
+    # The need is what the pool can staff, so no real input is infeasible. Asking one step
+    # beyond it at the given starts reaches the diagnosis safety net there.
+    staffable_steps = PuLPTeamAssignmentSolver._staffable_steps
+
+    def inflated(self, project, candidates):
+        extra = 1 if project.date_ranges[0].start in starts else 0
+        return staffable_steps(self, project, candidates) + extra
+
+    monkeypatch.setattr(PuLPTeamAssignmentSolver, "_staffable_steps", inflated)
 
 
-def test_infeasible_starts_are_flagged_and_skipped(solver):
-    members = _forced_pair("m", vacations=[WEEK_2, WEEK_3])
-    solo = _person("solo", vacations=[WEEK_1])
-    project = _project(included_person_ids=[p.id for p in members])
+def test_infeasible_starts_are_flagged_and_skipped(solver, monkeypatch):
+    _unreachable_from(monkeypatch, {WEEK_1.start})
     window = DateRange(start=WEEK_1.start, end=WEEK_3.start)
 
-    scan = solver.solve_pool_over_starts(project, members + [solo], AssignmentWeights(), window)
+    scan = solver.solve_pool_over_starts(_project(), [_person("p1")], AssignmentWeights(), window)
 
     first, second, third = scan.candidates
     assert first.feasible is False
     assert (first.score, first.max_score, first.fully_covered, first.team) == (None, None, None, None)
     assert second.feasible and third.feasible
     assert scan.best_start == WEEK_2.start
-    assert [m.person_id for m in scan.pool[0].members] == ["solo"]
+    assert [m.person_id for m in scan.pool[0].members] == ["p1"]
 
 
-def test_all_infeasible_raises_the_earliest_candidate_conflicts(solver):
-    # Each week a different forced pair is available, so conflicts name a different pair.
-    people = _forced_pair("a", vacations=[WEEK_2]) + _forced_pair("b", vacations=[WEEK_1])
-    project = _project(included_person_ids=[p.id for p in people])
+def test_all_infeasible_raises_the_earliest_candidate_conflicts(solver, monkeypatch):
+    _unreachable_from(monkeypatch, {WEEK_1.start, WEEK_2.start})
+    # b is away in week 1, so the need, and the conflict's need_fte, differ between the weeks.
+    people = [_person("a"), _person("b", vacations=[WEEK_1])]
+    project = _project(skill_requirements=[SkillRequirement(id="python", min_level=4, fte=2.0)])
     window = DateRange(start=WEEK_1.start, end=WEEK_2.start)
 
     with pytest.raises(InfeasibleAssignmentError) as raised:
@@ -194,8 +200,8 @@ def test_all_infeasible_raises_the_earliest_candidate_conflicts(solver):
 
     with pytest.raises(InfeasibleAssignmentError) as at_week_2:
         solver.solve(shift_project(project, timedelta(weeks=1)), people, AssignmentWeights())
-    assert [c.forced_person_ids for c in raised.value.conflicts] == [["a0", "a1"]]
-    assert [c.forced_person_ids for c in at_week_2.value.conflicts] == [["b0", "b1"]]
+    assert [c.need_fte for c in raised.value.conflicts] == [1.2]
+    assert [c.need_fte for c in at_week_2.value.conflicts] == [2.2]
 
 
 def test_pool_at_best_start_matches_solve_pool_on_the_shifted_project(solver):

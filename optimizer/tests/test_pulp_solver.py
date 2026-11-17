@@ -2,7 +2,6 @@ from datetime import date
 
 import pytest
 from optimizer.adapters.pulp_solver import PuLPTeamAssignmentSolver
-from optimizer.domain.solver import InfeasibleAssignmentError
 from optimizer.models import (
     AssignmentWeights,
     AvailabilityWindow,
@@ -30,7 +29,7 @@ def solver():
 
 @pytest.fixture
 def project():
-    return ProjectInput(id="proj-test", skill_requirements=[_python()], excluded_person_ids=[])
+    return ProjectInput(id="proj-test", skill_requirements=[_python()])
 
 
 @pytest.fixture
@@ -87,12 +86,6 @@ def test_max_score_accounts_for_chemistry(solver, project, people):
     assert result.score <= result.max_score
 
 
-def test_respects_exclusions(solver, project, people):
-    project.excluded_person_ids = ["p1"]
-    result = solver.solve(project, people, AssignmentWeights(), respect_exclusions=True)
-    assert all(m.person_id != "p1" for m in result.members)
-
-
 def test_performance_weight_prefers_higher_level(solver, project, people):
     result = solver.solve(project, people, PERF_ONLY)
     # p1 has python level 5; p2 only 3
@@ -130,33 +123,17 @@ def test_chemistry_bonus_applied(solver, project, people):
     assert result.score > 0  # p1↔p2 affinity is +4
 
 
-def test_forced_member_takes_the_only_seat(solver, project, people):
-    project.included_person_ids = ["p2"]
-    result = solver.solve(project, people, PERF_ONLY)
-    # Performance alone would pick p1, but 1 FTE seats a single person by default.
-    assert _allocations(result) == {"p2": 1.0}
-
-
-def test_forced_member_split_when_max_people_allows(solver, project, people):
-    project.skill_requirements = [_python(max_people=2)]
-    project.included_person_ids = ["p2"]
-    result = solver.solve(project, people, PERF_ONLY)
-    # p2 is forced in at the minimum share and the stronger p1 covers the rest.
-    assert _allocations(result) == pytest.approx({"p2": 0.2, "p1": 0.8})
-
-
 def test_unavailable_window_excludes_person(solver, project, people):
     project.date_ranges = [SPAN]
-    project.included_person_ids = ["p1"]
     people[0].availability_windows = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.0)]
-    result = solver.solve(project, people, AssignmentWeights())
-    assert all(m.person_id != "p1" for m in result.members)
+    # Performance alone would pick p1.
+    result = solver.solve(project, people, PERF_ONLY)
+    assert _allocations(result) == {"p2": 1.0}
 
 
 def test_fte_allocation_reflects_windowed_availability(solver, project, people):
     project.date_ranges = [SPAN]
     project.skill_requirements = [_python(max_people=2)]
-    project.included_person_ids = ["p1"]
     people[0].availability_windows = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.4)]
     # p1 is the better fit, so it gets all it can give; p2 covers the remainder.
     result = solver.solve(project, people, PERF_ONLY)
@@ -165,15 +142,14 @@ def test_fte_allocation_reflects_windowed_availability(solver, project, people):
 
 def test_vacation_excludes_person(solver, project, people):
     project.date_ranges = [SPAN]
-    project.included_person_ids = ["p1"]
     people[0].vacations = [DateRange(start=date(2026, 1, 1), end=date(2026, 1, 31))]
-    result = solver.solve(project, people, AssignmentWeights())
-    assert all(m.person_id != "p1" for m in result.members)
+    # Performance alone would pick p1.
+    result = solver.solve(project, people, PERF_ONLY)
+    assert _allocations(result) == {"p2": 1.0}
 
 
 def test_fte_allocation_reflects_working_pattern(solver, project, people):
     project.skill_requirements = [_python(max_people=2)]
-    project.included_person_ids = ["p1"]
     people[0].working_days_per_week = 3
     result = solver.solve(project, people, PERF_ONLY)
     assert _allocations(result) == pytest.approx({"p1": 0.6, "p2": 0.4})
@@ -181,16 +157,15 @@ def test_fte_allocation_reflects_working_pattern(solver, project, people):
 
 def test_fully_assigned_person_is_not_selected(solver, project, people):
     project.date_ranges = [SPAN]
-    project.included_person_ids = ["p1"]
     people[0].assignments = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=1.0)]
-    result = solver.solve(project, people, AssignmentWeights())
-    assert all(m.person_id != "p1" for m in result.members)
+    # Performance alone would pick p1.
+    result = solver.solve(project, people, PERF_ONLY)
+    assert _allocations(result) == {"p2": 1.0}
 
 
 def test_availability_left_by_assignments_is_floored_to_the_grid(solver, project, people):
     project.date_ranges = [SPAN]
     project.skill_requirements = [_python(max_people=2)]
-    project.included_person_ids = ["p1"]
     people[0].assignments = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.5)]
     result = solver.solve(project, people, PERF_ONLY)
     assert _allocations(result) == pytest.approx({"p1": 0.4, "p2": 0.6})
@@ -250,23 +225,6 @@ def test_handover_keeps_same_person_across_phases(solver):
     assert stage1.keys() == stage2.keys() and len(stage1) == 1  # team kept stable across phases
 
 
-def _generalists(*ids):
-    # min_level 0 requirements accept them although they list no skill.
-    return [PersonInput(id=person_id, seniority=Seniority.SENIOR) for person_id in ids]
-
-
-def _unseatable_forced_project():
-    # Two forced members on a need that seats a single person.
-    project = ProjectInput(id="proj-test", skill_requirements=[_python(min_level=0)], included_person_ids=["a", "b"])
-    return project, _generalists("a", "b")
-
-
-def test_unseatable_forced_members_raise(solver):
-    project, candidates = _unseatable_forced_project()
-    with pytest.raises(InfeasibleAssignmentError):
-        solver.solve(project, candidates, AssignmentWeights())
-
-
 def test_phase_date_range_filters_unavailable_person(solver, people):
     people[0].availability_windows = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.0)]
     phase1 = ProjectPhase(
@@ -279,14 +237,13 @@ def test_phase_date_range_filters_unavailable_person(solver, people):
         skill_requirements=[_python()],
         date_range=DateRange(start=date(2026, 3, 2), end=date(2026, 3, 19)),
     )
-    project = ProjectInput(id="proj-test", phases=[phase1, phase2], included_person_ids=["p1"])
+    project = ProjectInput(id="proj-test", phases=[phase1, phase2])
 
-    result = solver.solve(project, people, AssignmentWeights())
+    result = solver.solve(project, people, PERF_ONLY)
 
-    # p1 is on leave (ratio 0) during stage-1's span, so the forced inclusion can't apply there.
-    assert "p1" not in _allocations(result, "stage-1")
-    # p1 is available again by stage-2's span, so the forced inclusion does apply.
-    assert "p1" in _allocations(result, "stage-2")
+    # p1 is the better fit but on leave (ratio 0) during stage-1's span only.
+    assert _allocations(result, "stage-1") == {"p2": 1.0}
+    assert _allocations(result, "stage-2") == {"p1": 1.0}
 
 
 @pytest.fixture
@@ -327,23 +284,6 @@ def test_pool_teams_differ_by_at_least_min_difference(solver, python_project, py
             assert len(a - b) >= 2  # fully disjoint for a team of two
 
 
-def test_pool_alternatives_respect_inclusions_and_exclusions(solver, python_project, pythonistas):
-    project = python_project.model_copy(
-        update={
-            "skill_requirements": [_python(fte=3.0, min_level=1)],
-            "included_person_ids": ["py3.0"],
-            "excluded_person_ids": ["py5.0"],
-        }
-    )
-    pool = solver.solve_pool(project, pythonistas, AssignmentWeights(), n_alternatives=5, min_difference=1)
-    assert len(pool) > 1
-    for result in pool:
-        selected = {m.person_id for m in result.members}
-        assert len(selected) == 3
-        assert "py3.0" in selected
-        assert "py5.0" not in selected
-
-
 def test_pool_truncates_when_candidates_run_out(solver, python_project, pythonistas):
     # 3 candidates for 2 one-person seats admit exactly 3 teams differing by one member.
     pool = solver.solve_pool(python_project, pythonistas[:3], AssignmentWeights(), n_alternatives=10, min_difference=1)
@@ -361,12 +301,6 @@ def test_pool_without_alternatives_matches_solve(solver, python_project, pythoni
     weights = AssignmentWeights()
     pool = solver.solve_pool(python_project, pythonistas, weights, n_alternatives=0)
     assert pool == [solver.solve(python_project, pythonistas, weights)]
-
-
-def test_pool_first_solve_still_raises_when_infeasible(solver):
-    project, candidates = _unseatable_forced_project()
-    with pytest.raises(InfeasibleAssignmentError):
-        solver.solve_pool(project, candidates, AssignmentWeights())
 
 
 @pytest.mark.parametrize("handover", [0.0, 0.5])
@@ -398,7 +332,7 @@ def test_phase_date_range_evaluates_assignments_per_phase(solver, people):
         skill_requirements=[_python()],
         date_range=DateRange(start=date(2026, 3, 2), end=date(2026, 3, 19)),
     )
-    project = ProjectInput(id="proj-test", phases=[phase1, phase2], included_person_ids=["p1"])
+    project = ProjectInput(id="proj-test", phases=[phase1, phase2])
 
     result = solver.solve(project, people, PERF_ONLY)
 
@@ -480,13 +414,6 @@ def test_under_capacity_pool_is_capped(solver):
     assert result.max_score == pytest.approx(1.4)
 
 
-def test_forced_members_exceeding_the_need_split_it_by_score(solver):
-    project = _dated(_python(min_level=1, max_people=2)).model_copy(update={"included_person_ids": ["strong", "weak"]})
-    candidates = [_person("strong", python_level=5.0), _person("weak", python_level=1.0), _person("other")]
-    result = solver.solve(project, candidates, PERF_ONLY)
-    assert _allocations(result) == pytest.approx({"strong": 0.8, "weak": 0.2})
-
-
 def test_handover_rewards_retained_fte(solver):
     phases = [ProjectPhase(id=f"stage-{k}", skill_requirements=[_python(min_level=1)]) for k in (1, 2)]
     project = ProjectInput(id="proj-test", phases=phases)
@@ -565,7 +492,7 @@ def test_availability_is_floored_to_the_grid(solver):
 
 
 def test_person_below_one_step_is_never_selected(solver):
-    project = _dated(_python(min_level=1, max_people=2)).model_copy(update={"included_person_ids": ["tiny"]})
+    project = _dated(_python(min_level=1, max_people=2))
     candidates = [_person("tiny", availability=0.19), _person("full")]
     result = solver.solve(project, candidates, AssignmentWeights())
     assert _allocations(result) == {"full": 1.0}

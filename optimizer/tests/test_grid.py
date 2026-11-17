@@ -56,4 +56,4 @@ def test_feasible_people_drops_anyone_below_one_step():
 
     project = ProjectInput(id="proj", date_ranges=[SPAN])
     people = [person("tiny", 0.15), person("one_day", 0.2), person("part", 0.55)]
-    assert [p.id for p in feasible_people(project, people, respect_exclusions=True)] == ["one_day", "part"]
+    assert [p.id for p in feasible_people(project, people)] == ["one_day", "part"]
