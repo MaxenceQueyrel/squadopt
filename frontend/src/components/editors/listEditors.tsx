@@ -413,55 +413,6 @@ export function TagSkillInput({
   );
 }
 
-export function PersonMultiSelect({
-  value,
-  onChange,
-  people,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-  people: Person[];
-}) {
-  const toggle = (id: string) =>
-    onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
-
-  if (people.length === 0)
-    return (
-      <p style={{ color: colors.muted, fontSize: "0.85rem", margin: 0 }}>No people available.</p>
-    );
-
-  return (
-    <div
-      style={{
-        border: `1px solid ${colors.border}`,
-        borderRadius: 6,
-        padding: "0.5rem",
-        maxHeight: 160,
-        overflow: "auto",
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: "0.25rem",
-      }}
-    >
-      {people.map((p) => (
-        <label
-          key={p.id}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: "0.85rem",
-            cursor: "pointer",
-          }}
-        >
-          <input type="checkbox" checked={value.includes(p.id)} onChange={() => toggle(p.id)} />
-          {p.name}
-        </label>
-      ))}
-    </div>
-  );
-}
-
 export function PhasesEditor({
   value,
   onChange,

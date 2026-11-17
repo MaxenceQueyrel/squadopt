@@ -79,8 +79,6 @@ export interface Project {
   name: string;
   description: string;
   skill_requirements: SkillRequirement[];
-  excluded_person_ids: string[];
-  included_person_ids: string[];
   date_ranges: DateRange[];
   phases: ProjectPhase[];
   // Earliest and latest allowed start; the optimizer shifts the whole schedule within it.
@@ -140,7 +138,6 @@ export interface OptimizationWeights {
 export interface OptimizationRequest {
   project_id: string;
   weights: OptimizationWeights;
-  respect_exclusions: boolean;
   n_alternatives: number; // 0–5 runner-up teams to return after the best one
 }
 
@@ -174,23 +171,13 @@ export interface PhaseCoverage {
   skills: SkillCoverage[];
 }
 
-export type InfeasibilityReason =
-  | "forced_member_conflict"
-  | "fte_not_reachable"
-  | "cross_project_forced_conflict";
+export type InfeasibilityReason = "fte_not_reachable";
 
 export interface PhaseConflict {
   phase_id: string | null;
   reason: InfeasibilityReason;
   required_fte: number; // the sum of the phase's skill FTE
   need_fte: number; // FTE the solver had to staff exactly, after capping by pool capacity
-  forced_person_ids: string[]; // subset of project.included_person_ids
-  // Set for cross_project_forced_conflict only: the forced person, every project they are
-  // forced into (this one included), and the overlap that can't fit; period is null when
-  // only undated scopes are involved.
-  person_id?: string | null;
-  project_ids?: string[];
-  period?: DateRange | null;
 }
 
 // `detail` of the 409 returned by optimizationApi.solve when no team is feasible.
@@ -220,7 +207,6 @@ export interface OptimizationResponse {
 export interface BatchOptimizationRequest {
   project_ids: string[]; // 2–10 distinct, non-completed projects
   weights: OptimizationWeights;
-  respect_exclusions: boolean;
 }
 
 export interface BatchOptimizationResponse {

@@ -567,7 +567,6 @@ export default function ProjectsPage() {
       {editing && (
         <ProjectForm
           project={editing === "new" ? null : editing}
-          people={people}
           skillOptions={skillOptions}
           onClose={() => setEditing(null)}
           onSave={async (draft, id) => {

@@ -44,7 +44,7 @@ optimizer/
 │   │   └── start_scan.py     StartCandidate, StartDateScan (flexible start window)
 │   ├── grid.py            0.2-FTE allocation grid: STEPS_PER_FTE, ALLOCATION_STEP, floor_to_grid, is_on_grid
 │   ├── objectives.py       Per-(person, skill) scoring (level, growth, cost, preference)
-│   ├── constraints.py     Feasibility filter (exclusions, availability of at least one step)
+│   ├── constraints.py     Feasibility filter (availability of at least one step)
 │   ├── coverage.py        FTE and per-skill coverage of a selected team
 │   ├── availability.py    Day-weighted FTE availability over a date range
 │   ├── schedule.py        Schedule anchor and rigid shift of a project's dates
@@ -64,10 +64,10 @@ optimizer/
 
 `PuLPTeamAssignmentSolver.solve()` takes a project, a list of candidates, and weights, and returns the optimal assignment as an `AssignmentResult`.
 
-1. **Feasibility filter** (`constraints.feasible_people`) — drops excluded persons and anyone whose effective availability over the project's date range, floored to the grid, is below one step (0.2 FTE).
+1. **Feasibility filter** (`constraints.feasible_people`) — drops anyone whose effective availability over the project's date range, floored to the grid, is below one step (0.2 FTE).
 2. **Per-share scores** (`objectives.compute_skill_scores`) — for each (person, required skill): the person's level in that skill over 5, whether the skill is a growth target or a preference, and the seniority-based cost.
 3. **Need** — each skill's `fte`, capped by what its qualified people can supply (availability, `max_people`), computed jointly by a small MILP because one person's availability may be claimed by several skills. A short supply becomes partial coverage, not an error.
-4. **MILP build** — per (person, skill) integer day counts `d ∈ {0..5}` (share = 0.2·d), created only for people at or above the skill's `min_level`, with a binary "fills this skill" flag counted against `max_people`. Each person's days stay within their floored availability, a binary selection variable links to the skills they fill, and the days sum to the need. Forced inclusions and chemistry (shared FTE capped by each person's total) are added on top.
+4. **MILP build** — per (person, skill) integer day counts `d ∈ {0..5}` (share = 0.2·d), created only for people at or above the skill's `min_level`, with a binary "fills this skill" flag counted against `max_people`. Each person's days stay within their floored availability, a binary selection variable links to the skills they fill, and the days sum to the need. Chemistry (shared FTE capped by each person's total) is added on top.
 5. **Solve** — `pulp.PULP_CBC_CMD` maximises the objective, minus a tiny per-person and per-share headcount penalty that prefers fewer, fuller allocations.
 6. **Phased projects** — if the project defines `phases`, they are solved jointly in a single MILP; with a `handover` weight > 0 the FTE a person keeps across consecutive phases is rewarded.
 
@@ -77,7 +77,6 @@ optimizer/
 - A scope's FTE is the sum of its `SkillRequirement.fte` (0.2 to 5.0, on the grid). `max_people` caps how many people the skill may be split across: it defaults to `ceil(fte)` and ranges from `ceil(fte)` to `fte / 0.2`. The grid wins over an even split: 1 FTE over two people is 0.8 + 0.2 or 0.6 + 0.4, never 0.5 + 0.5.
 - `min_level` is a hard rule: only people at or above it fill that skill. One person may fill several skills; their shares add up within their availability.
 - `AssignedMember.fte_allocation` is the person's total; `skill_allocations` breaks it down per skill. `SkillCoverage.met` compares `covered_fte` with the skill's `required_fte`.
-- A forced member who qualifies for no skill need is reported as `FORCED_MEMBER_CONFLICT`.
 
 See the root README for the full formulation of each term.
 

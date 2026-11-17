@@ -1,23 +1,8 @@
-import { formatDay } from "@/components/common/dates";
 import { colors } from "@/components/common/ui";
 import { formatFte } from "@/components/projects/staffing";
-import type { InfeasibilityDetail, Person, PhaseConflict, Project } from "@/types";
+import type { InfeasibilityDetail, PhaseConflict } from "@/types";
 
-// Mirrors the optimizer's ALLOCATION_STEP: the smallest share a selected person carries.
-const ALLOCATION_STEP = 0.2;
-const MAX_LISTED_NAMES = 3;
-
-function listNames(names: string[]): string {
-  if (names.length <= MAX_LISTED_NAMES) return names.join(", ");
-  return `${names.slice(0, MAX_LISTED_NAMES).join(", ")} and ${names.length - MAX_LISTED_NAMES} more`;
-}
-
-function explain(
-  conflict: PhaseConflict,
-  project: Project,
-  nameOf: (id: string) => string,
-  projectNameOf: (id: string) => string,
-): { reason: string; hint: string } {
+function explain(conflict: PhaseConflict): { reason: string; hint: string } {
   const scope = conflict.phase_id === null ? "the project" : `phase '${conflict.phase_id}'`;
   const need = formatFte(conflict.need_fte);
   // The solver caps the need at what the eligible pool can supply.
@@ -25,54 +10,14 @@ function explain(
     conflict.need_fte < conflict.required_fte
       ? `the ${need} FTE ${scope} can staff from who is available (of ${formatFte(conflict.required_fte)} required)`
       : `the ${need} FTE ${scope} needs`;
-  const forced = listNames(conflict.forced_person_ids.map(nameOf));
-  const oneForced = conflict.forced_person_ids.length === 1;
-  const forcedNoun = oneForced ? "member" : "members";
-
-  switch (conflict.reason) {
-    case "forced_member_conflict":
-      return {
-        reason: `Forced ${forcedNoun} ${forced} can't ${oneForced ? "be" : "all be"} staffed within ${fit}.`,
-        hint: `Un-force ${oneForced ? "this member" : "one of them"}, or raise the required FTE or max people.`,
-      };
-    case "fte_not_reachable":
-      return {
-        reason: `No mix of available people adds up to ${fit} in whole days per week.`,
-        hint: "Add candidates, or reduce the required FTE.",
-      };
-    case "cross_project_forced_conflict": {
-      const person = nameOf(conflict.person_id ?? "");
-      const others = (conflict.project_ids ?? []).filter((id) => id !== project.id);
-      const scopes =
-        others.length === 0
-          ? "overlapping phases of this project"
-          : `this project and ${listNames(others.map(projectNameOf))}`;
-      const period = conflict.period
-        ? ` from ${formatDay(conflict.period.start, true)} to ${formatDay(conflict.period.end, true)}`
-        : "";
-      return {
-        reason: `${person} is forced into ${scopes}, but their availability${period} can't give each at least ${ALLOCATION_STEP} FTE.`,
-        hint: `Un-force ${person} from one of them, or move the dates so they don't overlap.`,
-      };
-    }
-  }
+  return {
+    reason: `No mix of available people adds up to ${fit} in whole days per week.`,
+    hint: "Add candidates, or reduce the required FTE.",
+  };
 }
 
-/** Explains, in terms of the project's own setup, why the optimizer found no feasible team.
- * `projects` names the other projects a batch-solve conflict involves. */
-export function InfeasibilityReport({
-  detail,
-  project,
-  people,
-  projects,
-}: {
-  detail: InfeasibilityDetail;
-  project: Project;
-  people: Person[];
-  projects: Project[];
-}) {
-  const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
-  const projectNameOf = (id: string) => projects.find((p) => p.id === id)?.name ?? id;
+/** Explains, in terms of the project's own setup, why the optimizer found no feasible team. */
+export function InfeasibilityReport({ detail }: { detail: InfeasibilityDetail }) {
   return (
     <div
       role="alert"
@@ -91,7 +36,7 @@ export function InfeasibilityReport({
       ) : (
         <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem" }}>
           {detail.conflicts.map((conflict, i) => {
-            const { reason, hint } = explain(conflict, project, nameOf, projectNameOf);
+            const { reason, hint } = explain(conflict);
             return (
               <li key={i} style={{ marginBottom: "0.4rem" }}>
                 {reason}

@@ -10,8 +10,8 @@ What the app covers:
 
 - **Organizations** — every person, project, team, skill, role and assignment belongs to an organization; users create organizations and add registered users as members by email.
 - **People** — skills and levels, growth targets, preferences, affinities, weekly working pattern, vacations and availability windows, CSV import/export, and a capacity timeline.
-- **Projects** — per-skill FTE needs, optional phases, forced inclusions, exclusions, an optional flexible start window, and CSV import/export.
-- **Optimization** — an optimal team plus ranked alternatives, a coverage breakdown, an infeasibility report naming the conflicting constraints, and a batch mode that staffs several projects jointly by priority.
+- **Projects** — per-skill FTE needs, optional phases, an optional flexible start window, and CSV import/export.
+- **Optimization** — an optimal team plus ranked alternatives, a coverage breakdown, and a batch mode that staffs several projects jointly by priority.
 - **Staffing** — applying a proposed team replaces the project's assignments, which then count as committed load for every other project.
 
 ---
@@ -253,7 +253,6 @@ Because of the grid, 1 FTE across two people is 0.8 + 0.2 or 0.6 + 0.4, never 0.
 | $P$ | Feasible candidates of the scope (see [Availability and feasibility](#availability-and-feasibility)) |
 | $K$ | Skill requirements of the scope |
 | $P_k \subseteq P$ | Candidates qualified for skill $k$: $l_{ik} \geq m_k$ |
-| $\mathcal{F}$ | Forced inclusions — persons who must be assigned |
 | $i, j$ | Indices over persons in $P$ |
 | $k$ | Index over skills in $K$ |
 
@@ -313,15 +312,9 @@ One person may fill several skills; their shares add up within their availabilit
 
 $$y_{ik} \leq x_i \leq \sum_{k \,:\, i \in P_k} y_{ik}$$
 
-So a forced member who qualifies for no required skill makes the scope infeasible.
-
 **Staffing** — the scope staffs exactly its need:
 
 $$\sum_{k \in K} \sum_{i \in P_k} d_{ik} = N$$
-
-**Forced inclusions:**
-
-$$x_i = 1 \qquad \forall i \in \mathcal{F} \cap P$$
 
 **Chemistry** — positive affinity rewards the FTE two people share, with each person's shared FTE over all their pairs capped by their own allocation:
 
@@ -335,13 +328,13 @@ $a_{ij}$ is read from the affinities of whichever of the two persons comes first
 
 ### Need
 
-The need $N$ is not simply $\sum_k D_k$: each skill is capped by what its qualified people can supply. It is computed by an auxiliary MILP that maximises $\sum d_{ik}$ under the allocation constraints only. It is solved jointly because one person's availability may be claimed by several skills. A short supply therefore becomes partial coverage instead of an error. Forced members are left out of this computation, so a need they can't fit shows up as an infeasibility attributed to them.
+The need $N$ is not simply $\sum_k D_k$: each skill is capped by what its qualified people can supply. It is computed by an auxiliary MILP that maximises $\sum d_{ik}$ under the allocation constraints only. It is solved jointly because one person's availability may be claimed by several skills. A short supply therefore becomes partial coverage instead of an error, and the staffing constraint can always be met.
 
 The result reports, per scope, the required, staffed and available FTE and each skill's covered FTE. It is `fully_covered` when every scope staffs its required FTE and meets every skill's FTE. `max_score` is an upper bound for the weights: every per-share factor at 1 over the whole need, plus all shared FTE at maximum affinity.
 
 ### Availability and feasibility
 
-A person is feasible for a scope if they are not in the project's exclusion list (unless exclusions are ignored) and their availability over the scope's dates, floored to the grid, is at least one step.
+A person is feasible for a scope if their availability over the scope's dates, floored to the grid, is at least one step.
 
 Availability is the day-weighted average of the person's daily ratio over the scope's dates:
 
@@ -357,7 +350,7 @@ A scope without dates uses the base ratio.
 
 ### Phased projects
 
-Each phase $t$ is its own scope, with its own skill requirements and date range, and it inherits the project's exclusions and forced inclusions. All phases are solved in a **single MILP**. Variables become phase-indexed ($d_{ikt}$, $x_{it}$, …), and every phase keeps its own constraints and need $N_t$.
+Each phase $t$ is its own scope, with its own skill requirements and date range. All phases are solved in a **single MILP**. Variables become phase-indexed ($d_{ikt}$, $x_{it}$, …), and every phase keeps its own constraints and need $N_t$.
 
 With $w_\text{hand} = 0$ the objective is separable, so the optimum equals solving each phase alone. With $w_\text{hand} > 0$, the FTE a person keeps between consecutive phases is rewarded, for every person feasible in both:
 
@@ -391,13 +384,13 @@ Chemistry and handover only count within a project. In the API's batch mode, the
 
 ### Infeasibility diagnosis
 
-When the hard constraints admit no team, the solver relaxes the forced inclusions to name the cause for each phase:
+The need is sized to what the pool can staff, so a single-project solve is not expected to be infeasible. As a safety net, if the hard constraints admit no team, the solver reports each phase that can't be staffed to its need on its own:
 
 | Reason | Meaning |
 |--------|---------|
-| `forced_member_conflict` | Un-forcing the listed members makes the phase solvable |
-| `cross_project_forced_conflict` | Portfolio only: a person is forced into more overlapping scopes than they have steps over the overlap |
-| `fte_not_reachable` | Un-forcing the members doesn't help; not expected, since the need is sized to what the pool can staff |
+| `fte_not_reachable` | The phase can't be staffed to its need; not expected to occur |
+
+A portfolio solve can't be infeasible: staffing nothing meets every one of its constraints.
 
 ---
 

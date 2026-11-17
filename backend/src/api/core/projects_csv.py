@@ -9,8 +9,6 @@ from api.models.project import Project, ProjectCreate
 
 _JSON_FIELDS = (
     "skill_requirements",
-    "excluded_person_ids",
-    "included_person_ids",
     "date_ranges",
     "phases",
     "start_window",
@@ -36,11 +34,10 @@ def encode_projects_csv(projects: list[Project]) -> str:
     """Encodes projects as CSV text.
 
     Scalar `ProjectBase` fields become plain columns; `skill_requirements`,
-    `excluded_person_ids`, `included_person_ids`, `date_ranges`, `phases`, and
-    `start_window` are each JSON-encoded into a single cell, so
-    skill requirements carry their `min_level`, `fte` and `max_people`. An
-    open project's `completed_at` is written as an empty cell, and a project
-    without a start window gets `null` in `start_window`.
+    `date_ranges`, `phases`, and `start_window` are each JSON-encoded into a
+    single cell, so skill requirements carry their `min_level`, `fte` and
+    `max_people`. An open project's `completed_at` is written as an empty
+    cell, and a project without a start window gets `null` in `start_window`.
 
     Args:
         projects: Projects to encode.

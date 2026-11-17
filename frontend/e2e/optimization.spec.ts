@@ -10,8 +10,7 @@ import {
   uniqueSuffix,
 } from "./helpers";
 
-const PROJECT_CSV_HEADER =
-  "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,date_ranges,phases";
+const PROJECT_CSV_HEADER = "id,name,description,priority,skill_requirements,date_ranges,phases";
 
 const PEOPLE_CSV_HEADER =
   "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
@@ -41,16 +40,6 @@ async function importPeople(
   await expect(page.getByText(`Import complete — created ${people.length}.`)).toBeVisible();
 }
 
-/** Ids of everyone in the organization except `keepIds`, read from the People page's own fetch. */
-async function everyoneElse(page: Page, keepIds: string[]): Promise<string[]> {
-  const response = page.waitForResponse(
-    (r) => r.request().method() === "GET" && new URL(r.url()).pathname === "/api/v1/people/",
-  );
-  await page.goto("/people");
-  const people: { id: string }[] = await (await response).json();
-  return people.map((p) => p.id).filter((id) => !keepIds.includes(id));
-}
-
 /** Imports a non-phased project spanning January 2027, then opens its workspace. By default it
  * needs 1 FTE of a skill anyone can fill. */
 async function importDatedProject(
@@ -59,20 +48,16 @@ async function importDatedProject(
     id,
     name,
     skillRequirements = [{ id: "general", min_level: 0, fte: 1 }],
-    excludedPersonIds = [],
-    includedPersonIds = [],
   }: {
     id: string;
     name: string;
     skillRequirements?: { id: string; min_level: number; fte: number; max_people?: number }[];
-    excludedPersonIds?: string[];
-    includedPersonIds?: string[];
   },
 ): Promise<void> {
   const dateRanges = [{ start: "2027-01-01", end: "2027-01-31" }];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${id},${name},,high,${quote(skillRequirements)},${quote(excludedPersonIds)},${quote(includedPersonIds)},${quote(dateRanges)},[]`,
+    `${id},${name},,high,${quote(skillRequirements)},${quote(dateRanges)},[]`,
   ].join("\n");
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({
@@ -168,6 +153,7 @@ test("a flexible start window picks the start where the team is free and applyin
   const suffix = uniqueSuffix();
   const projectName = `Optimization Window ${suffix}`;
   const personId = `returning-${suffix}`;
+  const skillId = `returning-skill-${suffix}`;
 
   await page.goto("/projects");
   await page.getByRole("button", { name: "New project" }).click();
@@ -175,19 +161,20 @@ test("a flexible start window picks the start where the team is free and applyin
   await expect(page.getByLabel("Latest start")).toBeDisabled();
   await page.getByRole("button", { name: "Cancel" }).click();
 
-  // The only candidate is away for the planned month, so the first start after the
-  // vacation is the only one the team fully covers.
+  // The only candidate with the skill is away for the planned month, so the first start
+  // after the vacation is the only one the team fully covers.
   await importPeople(page, [
     {
       id: personId,
       name: `Returning ${suffix}`,
+      skills: [{ id: skillId, level: 3 }],
       vacations: [{ start: "2027-01-01", end: "2027-01-31" }],
     },
   ]);
   await importDatedProject(page, {
     id: `window-${suffix}`,
     name: projectName,
-    excludedPersonIds: await everyoneElse(page, [personId]),
+    skillRequirements: [{ id: skillId, min_level: 1, fte: 1 }],
   });
 
   await page.getByRole("button", { name: "Edit", exact: true }).click();
@@ -293,15 +280,18 @@ test("applying a stale proposal reports the FTE conflict by name", async ({ page
   const suffix = uniqueSuffix();
   const personId = `busy-${suffix}`;
   const personName = `Busy Person ${suffix}`;
-  await importPeople(page, [{ id: personId, name: personName }]);
+  const skillId = `busy-skill-${suffix}`;
+  await importPeople(page, [
+    { id: personId, name: personName, skills: [{ id: skillId, level: 3 }] },
+  ]);
 
-  // Forcing the person in makes them the proposal; staffing them full-time elsewhere
-  // afterwards makes that saved proposal conflict.
+  // A skill only this person has makes them the proposal; staffing them full-time
+  // elsewhere afterwards makes that saved proposal conflict.
   const proposedName = `Conflict Proposed ${suffix}`;
   await importDatedProject(page, {
     id: `conflict-proposed-${suffix}`,
     name: proposedName,
-    includedPersonIds: [personId],
+    skillRequirements: [{ id: skillId, min_level: 1, fte: 1 }],
   });
   await runOptimization(page);
 
@@ -326,40 +316,6 @@ test("applying a stale proposal reports the FTE conflict by name", async ({ page
   await expect(page.getByRole("alert")).toContainText(`exceed 1.0 FTE for: ${personName}`);
 });
 
-test("infeasible forced members are explained in the optimization panel", async ({ page }) => {
-  const suffix = uniqueSuffix();
-  const projectName = `Optimization Infeasible ${suffix}`;
-  // Every selected person carries at least 0.2 FTE, so six forced members can never fit
-  // a one-FTE project.
-  const members = Array.from({ length: 6 }, (_, i) => ({
-    id: `forced-${i + 1}-${suffix}`,
-    name: `Forced Member ${i + 1} ${suffix}`,
-  }));
-  const memberIds = members.map((m) => m.id);
-  await importPeople(page, members);
-  await importDatedProject(page, {
-    id: `infeasible-${suffix}`,
-    name: projectName,
-    excludedPersonIds: await everyoneElse(page, memberIds),
-    includedPersonIds: memberIds,
-  });
-
-  await page.getByRole("button", { name: "Optimize staffing" }).click();
-  const panel = page.getByRole("complementary", { name: "Optimize staffing" });
-  await panel.getByRole("button", { name: "Find optimal team" }).click();
-
-  const alert = panel.getByRole("alert");
-  await expect(alert).toContainText("No feasible team for these constraints");
-  await expect(alert).toContainText(
-    `Forced members Forced Member 1 ${suffix}, Forced Member 2 ${suffix}, Forced Member 3 ${suffix} and 3 more can't all be staffed within the 1 FTE the project needs.`,
-  );
-  await expect(alert).toContainText(
-    "Un-force one of them, or raise the required FTE or max people.",
-  );
-  await expect(alert).not.toContainText("status code 409");
-  await expect(page.getByRole("heading", { name: "Optimization result" })).toHaveCount(0);
-});
-
 test("a partially covered proposal breaks down its unmet requirements", async ({ page }) => {
   const suffix = uniqueSuffix();
   const projectName = `Optimization Partial ${suffix}`;
@@ -369,12 +325,12 @@ test("a partially covered proposal breaks down its unmet requirements", async ({
   await importPeople(page, [
     { id: expertId, name: expertName, skills: [{ id: skillId, level: 4 }] },
   ]);
-  // A single full-time candidate can staff only half of two FTE.
+  // The skill's single full-time candidate can staff only half of two FTE. The rest of the
+  // organization is eligible and free, so the shortfall is blamed on qualification, not FTE.
   await importDatedProject(page, {
     id: `partial-${suffix}`,
     name: projectName,
     skillRequirements: [{ id: skillId, min_level: 4, fte: 2 }],
-    excludedPersonIds: await everyoneElse(page, [expertId]),
   });
 
   await page.getByRole("button", { name: "Optimize staffing" }).click();
@@ -389,7 +345,7 @@ test("a partially covered proposal breaks down its unmet requirements", async ({
   const fteRow = coverage.getByRole("row", { name: /^FTE/ });
   await expect(fteRow).toContainText("1 / 2 FTE staffed");
   await expect(fteRow).toContainText(
-    "Only 1 FTE is available from eligible people — add candidates or reduce the required FTE.",
+    "Qualified people can't fill every skill need below — add qualified candidates or lower the requirements.",
   );
   const skillRow = coverage.getByRole("row", { name: new RegExp(`^${skillId}`) });
   await expect(skillRow).toContainText("1 / 2 FTE covered · level ≥ 4");
@@ -474,25 +430,24 @@ test("a user without optimization:run sees no Optimize button", async ({ page })
 
 test("selected projects are optimized together and applied all at once", async ({ page }) => {
   const suffix = uniqueSuffix();
+  const skillId = `batch-skill-${suffix}`;
   const people = [1, 2].map((i) => ({
     id: `batch-${i}-${suffix}`,
     name: `Batch Person ${i} ${suffix}`,
+    skills: [{ id: skillId, level: 3 }],
   }));
   await importPeople(page, people);
-  const excluded = await everyoneElse(
-    page,
-    people.map((p) => p.id),
-  );
 
-  // Two 1-FTE projects over the same month, each staffable by one of the two people.
+  // Two 1-FTE projects over the same month, each staffable by one of the two people with
+  // the skill.
   const names = ["Alpha", "Beta", "Gamma"].map((n) => `Batch ${n} ${suffix}`);
-  const skills = [{ id: "general", min_level: 0, fte: 1 }];
+  const skills = [{ id: skillId, min_level: 1, fte: 1 }];
   const dateRanges = [{ start: "2027-01-01", end: "2027-01-31" }];
   const csv = [
     PROJECT_CSV_HEADER,
     ...names.map(
       (name, i) =>
-        `batch-${i}-${suffix},${name},,${i === 0 ? "high" : "low"},${quote(skills)},${quote(excluded)},[],${quote(dateRanges)},[]`,
+        `batch-${i}-${suffix},${name},,${i === 0 ? "high" : "low"},${quote(skills)},${quote(dateRanges)},[]`,
     ),
   ].join("\n");
   await page.goto("/projects");

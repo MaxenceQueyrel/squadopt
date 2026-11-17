@@ -16,8 +16,6 @@ class ProjectBase(BaseModel):
     name: str
     description: str = ""
     skill_requirements: list[SkillRequirement] = []
-    excluded_person_ids: list[str] = []
-    included_person_ids: list[str] = []
     date_ranges: list[DateRange] = []
     phases: list[ProjectPhase] = []
     priority: ProjectPriority = ProjectPriority.MEDIUM

@@ -83,8 +83,6 @@ def solve_assignment(
     project_input = ProjectInput(
         id=project.id,
         skill_requirements=project.skill_requirements,
-        excluded_person_ids=project.excluded_person_ids,
-        included_person_ids=project.included_person_ids,
         date_ranges=project.date_ranges,
         phases=project.phases,
     )
@@ -98,7 +96,6 @@ def solve_assignment(
                 project_input,
                 people_inputs,
                 request.weights,
-                request.respect_exclusions,
                 n_alternatives=request.n_alternatives,
             )
         else:
@@ -107,7 +104,6 @@ def solve_assignment(
                 people_inputs,
                 request.weights,
                 project.start_window,
-                request.respect_exclusions,
                 n_alternatives=request.n_alternatives,
             )
             pool = scan.pool
@@ -169,7 +165,7 @@ def solve_batch(
     `ignored_start_window_project_ids`.
 
     Args:
-        request: The projects to staff, the weights and the exclusions toggle.
+        request: The projects to staff and the weights.
         organization_id: The active organization.
 
     Returns:
@@ -215,8 +211,6 @@ def solve_batch(
         PortfolioProject(
             id=project.id,
             skill_requirements=project.skill_requirements,
-            excluded_person_ids=project.excluded_person_ids,
-            included_person_ids=project.included_person_ids,
             date_ranges=project.date_ranges,
             phases=project.phases,
             priority=project.priority,
@@ -229,9 +223,7 @@ def solve_batch(
     ]
 
     try:
-        result = solver.solve_portfolio(
-            portfolio, people_inputs, request.weights, request.respect_exclusions
-        )
+        result = solver.solve_portfolio(portfolio, people_inputs, request.weights)
     except InfeasiblePortfolioError as exc:
         raise HTTPException(
             status_code=409,

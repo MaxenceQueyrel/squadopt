@@ -19,10 +19,6 @@ class ProjectInput(BaseModel):
     skill_requirements: list[SkillRequirement] = Field(
         default=[], description="Skill needs of the project; the FTE to staff is the sum of their fte."
     )
-    excluded_person_ids: list[str] = Field(
-        default=[], description="Person IDs that must not be assigned to the project."
-    )
-    included_person_ids: list[str] = Field(default=[], description="Person IDs that must be assigned to the project.")
     date_ranges: list[DateRange] = Field(
         default=[],
         description="Calendar spans during which the project runs. Empty means no date constraint.",

@@ -1,13 +1,8 @@
 import { useState } from "react";
 import { Button, colors, Field, inputStyle, Modal, selectStyle } from "@/components/common/ui";
-import {
-  DateRangesEditor,
-  PersonMultiSelect,
-  PhasesEditor,
-  SkillReqsEditor,
-} from "@/components/editors/listEditors";
+import { DateRangesEditor, PhasesEditor, SkillReqsEditor } from "@/components/editors/listEditors";
 import { errorMessage } from "@/services/api";
-import type { DateRange, Person, Priority, Project } from "@/types";
+import type { DateRange, Priority, Project } from "@/types";
 
 const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
 
@@ -18,8 +13,6 @@ function emptyDraft(): ProjectDraft {
     name: "",
     description: "",
     skill_requirements: [],
-    excluded_person_ids: [],
-    included_person_ids: [],
     date_ranges: [],
     phases: [],
     start_window: null,
@@ -31,13 +24,11 @@ function emptyDraft(): ProjectDraft {
 /** Modal form to create a project or edit its requirements, phases and constraints. */
 export function ProjectForm({
   project,
-  people,
   skillOptions,
   onClose,
   onSave,
 }: {
   project: Project | null;
-  people: Person[];
   skillOptions: string[];
   onClose: () => void;
   onSave: (draft: ProjectDraft, id?: string) => Promise<void>;
@@ -201,25 +192,6 @@ export function ProjectForm({
           </Field>
         </div>
       </fieldset>
-
-      <Field label="Must include" hint="People that must be on the team">
-        <PersonMultiSelect
-          value={draft.included_person_ids}
-          onChange={(v) => set("included_person_ids", v)}
-          people={people}
-        />
-      </Field>
-
-      <Field
-        label="Excluded"
-        hint="People that must not be assigned (when exclusions are respected)"
-      >
-        <PersonMultiSelect
-          value={draft.excluded_person_ids}
-          onChange={(v) => set("excluded_person_ids", v)}
-          people={people}
-        />
-      </Field>
 
       {error && (
         <p role="alert" style={{ color: colors.danger, margin: 0 }}>

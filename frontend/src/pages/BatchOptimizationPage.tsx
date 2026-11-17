@@ -48,7 +48,6 @@ export default function BatchOptimizationPage() {
   const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean);
   const { people, projects, optimizationWeights, fetchPeople, fetchProjects } = useAppStore();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [respectExclusions, setRespectExclusions] = useState(true);
   const [solving, setSolving] = useState(false);
   const [result, setResult] = useState<BatchOptimizationResponse | null>(null);
   const [infeasible, setInfeasible] = useState<BatchInfeasibilityDetail | null>(null);
@@ -87,7 +86,6 @@ export default function BatchOptimizationPage() {
         await optimizationApi.solveBatch({
           project_ids: ids,
           weights: optimizationWeights,
-          respect_exclusions: respectExclusions,
         }),
       );
     } catch (e) {
@@ -149,22 +147,6 @@ export default function BatchOptimizationPage() {
         >
           <WeightSliders />
         </div>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            fontSize: "0.875rem",
-            margin: "0.25rem 0 1rem",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={respectExclusions}
-            onChange={(e) => setRespectExclusions(e.target.checked)}
-          />
-          Respect excluded people
-        </label>
         <Button variant="primary" onClick={solve} disabled={solving || !validCount}>
           {solving ? "Solving…" : "Find optimal teams"}
         </Button>
@@ -191,12 +173,7 @@ export default function BatchOptimizationPage() {
               project && (
                 <div key={detail.project_id} style={{ marginBottom: "1rem" }}>
                   <h3 style={{ margin: 0 }}>{project.name}</h3>
-                  <InfeasibilityReport
-                    detail={detail}
-                    project={project}
-                    people={people}
-                    projects={projects}
-                  />
+                  <InfeasibilityReport detail={detail} />
                 </div>
               )
             );
