@@ -9,11 +9,13 @@ from api.models.role import Role as RoleCatalogEntry
 from api.models.team import Team
 from api.repositories.file_repository import FileRepository
 from api.v1 import assignments as assignments_module
+from api.v1 import optimization as optimization_module
 from api.v1 import people as people_module
 from api.v1 import projects as projects_module
 from api.v1 import roles as roles_module
 from api.v1 import teams as teams_module
-from optimizer.models import Seniority
+from optimizer.domain.solver import InfeasibleAssignmentError, InfeasiblePortfolioError
+from optimizer.models import InfeasibilityReason, PhaseConflict, Seniority
 from tests.conftest import ONE_FTE_NEED, create_org, register_and_login
 
 
@@ -141,15 +143,16 @@ def test_solve_batch_staffs_the_higher_priority_project_first(client, org_header
 
 def test_solve_batch_frees_the_selected_projects_own_assignments(client, org_headers):
     bob_id = _create_person(client, org_headers, "Bob")
-    _create_person(client, org_headers, "Alice")
-    project_a = _create_project(client, org_headers, "A", included_person_ids=[bob_id])
+    alice_id = _create_person(client, org_headers, "Alice")
+    project_a = _create_project(client, org_headers, "A")
     project_b = _create_project(client, org_headers, "B")
     _assign(client, org_headers, bob_id, project_a)
 
     response = _solve_batch(client, org_headers, [project_a, project_b])
 
     assert response.status_code == 200
-    assert _member_ids(response.json()["teams"][0]) == [bob_id]
+    members = [p for team in response.json()["teams"] for p in _member_ids(team)]
+    assert sorted(members) == sorted([alice_id, bob_id])
 
 
 def test_solve_batch_keeps_unselected_projects_assignments_as_committed_load(
@@ -249,61 +252,38 @@ def test_project_with_an_unknown_priority_is_rejected(client, org_headers):
     assert response.status_code == 422
 
 
-def test_solve_batch_returns_409_with_cross_project_forced_conflict(
-    client, org_headers
-):
-    # Bob can give only one day a week in November but is forced into both projects.
-    bob_id = _create_person(
-        client,
-        org_headers,
-        "Bob",
-        availability_windows=[{**NOVEMBER, "ratio": 0.2}],
-    )
-    project_ids = [
-        _create_project(client, org_headers, name, included_person_ids=[bob_id])
-        for name in ("A", "B")
-    ]
-
-    response = _solve_batch(client, org_headers, project_ids)
-
-    assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert detail["message"]
-    assert [project["project_id"] for project in detail["projects"]] == project_ids
-    for project in detail["projects"]:
-        assert project["message"]
-        cross = [
-            c
-            for c in project["conflicts"]
-            if c["reason"] == "cross_project_forced_conflict"
-        ]
-        assert cross
-        assert cross[0]["person_id"] == bob_id
-        assert sorted(cross[0]["project_ids"]) == sorted(project_ids)
-    assert client.get("/api/v1/teams/", headers=org_headers).json() == []
-
-
 def test_solve_batch_returns_409_listing_only_the_infeasible_projects(
-    client, org_headers
+    client, org_headers, monkeypatch
 ):
-    # A 1 FTE need goes to at most one person, so forcing two people into it can
-    # never fit.
-    forced_ids = [_create_person(client, org_headers, n) for n in "XY"]
+    # A portfolio solve staffs each phase at most to its need, so no real batch is
+    # infeasible; the 409 path is exercised by making the solver raise.
     _create_person(client, org_headers, "Alice")
     feasible = _create_project(client, org_headers, "A")
-    infeasible = _create_project(
-        client, org_headers, "B", included_person_ids=forced_ids
+    infeasible = _create_project(client, org_headers, "B")
+    conflict = PhaseConflict(
+        phase_id=None,
+        reason=InfeasibilityReason.FTE_NOT_REACHABLE,
+        required_fte=1.0,
+        need_fte=1.0,
     )
+
+    def raise_infeasible(*args, **kwargs):
+        raise InfeasiblePortfolioError(
+            [InfeasibleAssignmentError(infeasible, [conflict])]
+        )
+
+    monkeypatch.setattr(optimization_module.solver, "solve_portfolio", raise_infeasible)
 
     response = _solve_batch(client, org_headers, [feasible, infeasible])
 
     assert response.status_code == 409
-    projects = response.json()["detail"]["projects"]
-    assert [project["project_id"] for project in projects] == [infeasible]
-    assert projects[0]["conflicts"]
-    assert all(
-        c["reason"] != "cross_project_forced_conflict" for c in projects[0]["conflicts"]
-    )
+    detail = response.json()["detail"]
+    assert detail["message"]
+    assert [project["project_id"] for project in detail["projects"]] == [infeasible]
+    assert detail["projects"][0]["message"]
+    assert [c["reason"] for c in detail["projects"][0]["conflicts"]] == [
+        "fte_not_reachable"
+    ]
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []
 
 

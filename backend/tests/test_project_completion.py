@@ -84,8 +84,6 @@ def test_legacy_project_without_completed_at_loads_as_open(
         "name": "Legacy",
         "description": "",
         "skill_requirements": [ONE_FTE_NEED],
-        "excluded_person_ids": [],
-        "included_person_ids": [],
         "date_ranges": [],
         "phases": [],
         "priority": "medium",
@@ -112,3 +110,23 @@ def test_legacy_project_with_squads_loads_without_them(client, org_headers, tmp_
 
     assert response.status_code == 200
     assert "squads" not in response.json()
+
+
+def test_legacy_project_with_inclusions_and_exclusions_loads_without_them(
+    client, org_headers, tmp_path
+):
+    legacy = {
+        "id": "legacy-project",
+        "organization_id": org_headers["X-Organization-Id"],
+        "name": "Legacy",
+        "skill_requirements": [ONE_FTE_NEED],
+        "excluded_person_ids": ["p-carol"],
+        "included_person_ids": ["p-alice"],
+    }
+    (tmp_path / "projects.json").write_text(json.dumps([legacy]))
+
+    response = client.get("/api/v1/projects/legacy-project", headers=org_headers)
+
+    assert response.status_code == 200
+    assert "excluded_person_ids" not in response.json()
+    assert "included_person_ids" not in response.json()

@@ -60,7 +60,6 @@ class TeamCreate(TeamProposal):
 class OptimizationRequest(BaseModel):
     project_id: str
     weights: AssignmentWeights = AssignmentWeights()
-    respect_exclusions: bool = True
     n_alternatives: int = Field(default=2, ge=0, le=5)
 
 
@@ -98,7 +97,6 @@ class InfeasibilityDetail(BaseModel):
 class BatchOptimizationRequest(BaseModel):
     project_ids: list[str] = Field(min_length=2, max_length=10)
     weights: AssignmentWeights = AssignmentWeights()
-    respect_exclusions: bool = True
 
     @field_validator("project_ids")
     @classmethod
@@ -118,8 +116,7 @@ class BatchInfeasibilityDetail(BaseModel):
 
     Attributes:
         message: Human-readable summary of the failure.
-        projects: One entry per infeasible project, in request order. A
-            `cross_project_forced_conflict` is listed under every project it involves.
+        projects: One entry per infeasible project, in request order.
     """
 
     message: str
