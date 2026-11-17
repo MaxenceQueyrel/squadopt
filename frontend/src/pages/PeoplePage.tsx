@@ -437,28 +437,26 @@ function SummaryCard<T extends { id: string }>({
         </div>
         {action}
       </div>
+      {(items.length > 0 || query) && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={`Search ${kind}s`}
+          style={{ marginBottom: "0.75rem" }}
+        />
+      )}
       {items.length === 0 ? (
         <SummaryRow>
           <span style={{ color: colors.muted }}>No {kind}s yet.</span>
         </SummaryRow>
+      ) : visible.length === 0 ? (
+        <SummaryRow>
+          <span style={{ color: colors.muted }}>
+            No {kind}s match "{query.trim()}".
+          </span>
+        </SummaryRow>
       ) : (
-        <>
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder={`Search ${kind}s`}
-            style={{ marginBottom: "0.75rem" }}
-          />
-          {visible.length === 0 ? (
-            <SummaryRow>
-              <span style={{ color: colors.muted }}>
-                No {kind}s match "{query.trim()}".
-              </span>
-            </SummaryRow>
-          ) : (
-            visible.map(renderRow)
-          )}
-        </>
+        visible.map(renderRow)
       )}
     </Card>
   );

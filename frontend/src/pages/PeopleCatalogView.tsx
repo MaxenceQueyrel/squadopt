@@ -188,7 +188,7 @@ function CatalogSection({
           </Button>
         )}
       </div>
-      {items.length > 0 && (
+      {(items.length > 0 || query) && (
         <SearchInput
           value={query}
           onChange={setQuery}

@@ -169,12 +169,13 @@ test("searching the Roles & skills tables matches ids and descriptions", async (
   const other = `catalog-search-b-${suffix}`;
 
   await page.goto("/people/catalog");
-  for (const [id, description] of [
-    [described, `Kubernetes wrangling ${suffix}`],
-    [other, ""],
+  for (const [kind, id, description] of [
+    ["role", `catalog-search-role-${suffix}`, ""],
+    ["skill", described, `Kubernetes wrangling ${suffix}`],
+    ["skill", other, ""],
   ]) {
-    await page.getByRole("button", { name: "Add skill", exact: true }).click();
-    await page.getByLabel("Skill id").fill(id);
+    await page.getByRole("button", { name: `Add ${kind}`, exact: true }).click();
+    await page.getByLabel(kind === "role" ? "Role id" : "Skill id").fill(id);
     await page.getByLabel("Description").fill(description);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("row", { name: id })).toBeVisible();
