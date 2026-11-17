@@ -122,6 +122,45 @@ test("a skill nobody has shows as a coverage gap and is described on the Roles &
   await expect(page.getByRole("row", { name: skillId })).toContainText("Spotting staffing gaps");
 });
 
+test("a skill picked for a person is hidden from their other skill rows", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const alpha = `alpha-${suffix}`;
+  const beta = `beta-${suffix}`;
+  const roleId = `qa-engineer-${suffix}`;
+  const suggestion = (skill: string) => page.getByRole("button", { name: skill, exact: true });
+
+  await page.goto("/people");
+  await page.getByRole("button", { name: "Add role", exact: true }).click();
+  await page.getByLabel("Role id").fill(roleId);
+  await page.getByRole("button", { name: "Save" }).click();
+  for (const skillId of [alpha, beta]) {
+    await page.getByRole("button", { name: "Add skill", exact: true }).click();
+    await page.getByLabel("Skill id").fill(skillId);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(skillId, { exact: true })).toBeVisible();
+  }
+
+  await page.getByRole("button", { name: "Add person", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill(`No Duplicates ${suffix}`);
+  await page.getByRole("combobox", { name: /^Role/ }).selectOption(roleId);
+  const addSkillRow = page.getByRole("button").filter({ hasText: "+ Add skill" });
+  const skillIds = page.getByPlaceholder("skill id", { exact: true });
+  await addSkillRow.click();
+  await skillIds.last().fill(alpha);
+  // Clicking outside the skill combobox closes its suggestion list, which would cover the button.
+  await page.getByTitle("Proficiency level (0–5)").click();
+  await addSkillRow.click();
+  await skillIds.last().fill(suffix);
+  await expect(suggestion(beta)).toBeVisible();
+  await expect(suggestion(alpha)).toHaveCount(0);
+  await skillIds.first().click();
+  await expect(suggestion(alpha)).toBeVisible();
+
+  await skillIds.last().fill(alpha);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toHaveText(`Skill "${alpha}" is listed more than once.`);
+});
+
 test("searching the Roles and Skill coverage cards narrows their rows", async ({ page }) => {
   const suffix = uniqueSuffix();
   const roleA = `search-role-a-${suffix}`;

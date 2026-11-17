@@ -65,7 +65,9 @@ export function SkillsEditor({
             placeholder="skill id"
             value={s.id}
             onChange={(id) => update(i, { id })}
-            options={skillOptions}
+            options={skillOptions.filter(
+              (o) => !value.some((other, idx) => idx !== i && other.id.trim() === o),
+            )}
             style={{ flex: 1 }}
           />
           <input
