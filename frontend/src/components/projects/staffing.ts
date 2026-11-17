@@ -109,23 +109,29 @@ export function formatSkillAllocations(allocations: SkillAllocation[]): string {
   return allocations.map((a) => `${a.skill_id} ${Math.round(a.fte * 100)}%`).join(" · ");
 }
 
-/** A score as a share of its theoretical max, e.g. "26% of theoretical max". Not clamped:
- * negative affinities can push the score below zero. "—" when there is no score or the max
- * is zero (an empty result). */
-export function formatScoreShare(
+/** A score as a rating out of 5 of its theoretical max, e.g. "2.1 / 5". Clamped to [0, 5]:
+ * negative affinities can push a score below zero, but a rating reads as bounded, and the
+ * exact value stays in `formatRawScore`. "—" when there is no score or the max is zero (an
+ * empty result). */
+export function formatScoreRating(
   score: number | null | undefined,
   maxScore: number | null | undefined,
 ): string {
   if (score == null || maxScore == null || maxScore <= 0) return "—";
-  return `${Math.round((score / maxScore) * 100)}% of theoretical max`;
+  const rating = Math.min(Math.max((score / maxScore) * 5, 0), 5);
+  return `${rating.toFixed(1)} / 5`;
 }
 
+/** The exact score behind `formatScoreRating`, with its unclamped share of the max, e.g.
+ * "Raw score: 12.34 / 29.10 (42% of theoretical max)". Undefined when the rating is "—", so
+ * there is no details bubble next to a dash. */
 export function formatRawScore(
   score: number | null | undefined,
   maxScore: number | null | undefined,
 ): string | undefined {
-  if (score == null || maxScore == null) return undefined;
-  return `Raw score: ${score.toFixed(2)} / ${maxScore.toFixed(2)}`;
+  if (score == null || maxScore == null || maxScore <= 0) return undefined;
+  const share = Math.round((score / maxScore) * 100);
+  return `Raw score: ${score.toFixed(2)} / ${maxScore.toFixed(2)} (${share}% of theoretical max)`;
 }
 
 export function formatHeadcount(count: number): string {

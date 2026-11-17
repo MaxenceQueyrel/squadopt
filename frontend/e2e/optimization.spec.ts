@@ -90,7 +90,18 @@ test("optimizing from the project workspace shows the best team", async ({ page 
   await expect(page).toHaveURL(/\?tab=proposals$/);
   const best = page.getByRole("region", { name: "Best team" });
   await expect(best.getByText("Optimization score:")).toBeVisible();
-  await expect(best.getByText(/^-?\d+% of theoretical max$/)).toBeVisible();
+  await expect(best.getByText(/^\d\.\d \/ 5$/)).toBeVisible();
+
+  const details = best.getByRole("button", { name: "Score details" });
+  const rawScore = /^Raw score: -?\d+\.\d{2} \/ \d+\.\d{2} \(-?\d+% of theoretical max\)$/;
+  await expect(details).toHaveAccessibleDescription(rawScore);
+  await expect(best.getByRole("tooltip")).toBeHidden();
+  await details.focus();
+  await expect(best.getByRole("tooltip")).toHaveText(rawScore);
+  await page.keyboard.press("Escape");
+  await expect(best.getByRole("tooltip")).toBeHidden();
+  await details.hover();
+  await expect(best.getByRole("tooltip")).toHaveText(rawScore);
 });
 
 test("the overview's Compare action opens the project's saved proposals", async ({ page }) => {
@@ -482,6 +493,7 @@ test("selected projects are optimized together and applied all at once", async (
     const card = results.getByRole("region", { name, exact: true });
     await expect(card.getByText("All requirements covered")).toBeVisible();
     await expect(card.getByText("Optimization score:")).toBeVisible();
+    await expect(card.getByText(/^\d\.\d \/ 5$/)).toBeVisible();
   }
 
   await results.getByRole("button", { name: "Apply all" }).click();
