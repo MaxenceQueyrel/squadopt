@@ -20,6 +20,13 @@ export function SkillsModal({
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
+    // The skill pickers hide skills already chosen, but a duplicate can still be typed by hand.
+    const skillIds = skills.map((skill) => skill.id.trim());
+    const repeated = skillIds.find((id, i) => skillIds.indexOf(id) !== i);
+    if (repeated) {
+      setError(`Skill "${repeated}" is listed more than once.`);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
