@@ -325,7 +325,8 @@ test("a partially covered proposal breaks down its unmet requirements", async ({
   await importPeople(page, [
     { id: expertId, name: expertName, skills: [{ id: skillId, level: 4 }] },
   ]);
-  // The skill's single full-time candidate can staff only half of two FTE.
+  // The skill's single full-time candidate can staff only half of two FTE. The rest of the
+  // organization is eligible and free, so the shortfall is blamed on qualification, not FTE.
   await importDatedProject(page, {
     id: `partial-${suffix}`,
     name: projectName,
@@ -344,7 +345,7 @@ test("a partially covered proposal breaks down its unmet requirements", async ({
   const fteRow = coverage.getByRole("row", { name: /^FTE/ });
   await expect(fteRow).toContainText("1 / 2 FTE staffed");
   await expect(fteRow).toContainText(
-    "Only 1 FTE is available from eligible people — add candidates or reduce the required FTE.",
+    "Qualified people can't fill every skill need below — add qualified candidates or lower the requirements.",
   );
   const skillRow = coverage.getByRole("row", { name: new RegExp(`^${skillId}`) });
   await expect(skillRow).toContainText("1 / 2 FTE covered · level ≥ 4");
