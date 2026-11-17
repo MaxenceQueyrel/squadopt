@@ -138,7 +138,7 @@ export function SkillReqsEditor({
             value={s.id}
             onChange={(id) => update(i, { id })}
             options={skillOptions.filter(
-              (o) => !value.some((other, idx) => idx !== i && other.id === o),
+              (o) => !value.some((other, idx) => idx !== i && other.id.trim() === o),
             )}
             style={{ flex: 1 }}
           />
