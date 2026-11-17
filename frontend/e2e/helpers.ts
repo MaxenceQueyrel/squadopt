@@ -58,12 +58,21 @@ export async function addSkillRequirement(
   await page.getByLabel("FTE", { exact: true }).last().selectOption(String(fte));
 }
 
-/** Creates a 1-FTE project anyone can staff through the Projects page form. */
+/** Adds a date range to the last phase of the open project form. */
+export async function addDateRange(page: Page, start: string, end: string): Promise<void> {
+  await page.getByRole("button").filter({ hasText: "+ Add date range" }).last().click();
+  await page.getByLabel("Start", { exact: true }).last().fill(start);
+  await page.getByLabel("End", { exact: true }).last().fill(end);
+}
+
+/** Creates a 1-FTE project anyone can staff through the Projects page form. Its far-future
+ * dates keep it upcoming and clear of other specs' assignments. */
 export async function createProject(page: Page, name: string): Promise<void> {
   await page.goto("/projects");
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByLabel("Name", { exact: true }).fill(name);
   await addSkillRequirement(page, { id: "general" });
+  await addDateRange(page, "2099-01-01", "2099-01-31");
   await page.getByRole("button", { name: "Save" }).click();
   await page.getByRole("heading", { name }).waitFor();
 }

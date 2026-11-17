@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import {
+  addDateRange,
   addSkillRequirement,
   createPerson,
   createProject,
@@ -9,6 +10,8 @@ import {
 } from "./helpers";
 
 const PROJECT_CSV_HEADER = "id,name,description,priority,skill_requirements,date_ranges,phases";
+// Projects need dates; specs that don't exercise them use these, clear of other specs' assignments.
+const FAR_FUTURE = [{ start: "2099-01-01", end: "2099-01-31" }];
 
 const PEOPLE_CSV_HEADER =
   "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
@@ -58,6 +61,7 @@ test("the project form sums per-skill FTE and keeps max people in range", async 
   await addSkillRequirement(page, { id: "react", minLevel: 2, fte: 0.8 });
   await expect(maxPeople.last()).toHaveValue("1");
   await expect(page.getByText("Total 2.8 FTE")).toBeVisible();
+  await addDateRange(page, FAR_FUTURE[0].start, FAR_FUTURE[0].end);
   await page.getByRole("button", { name: "Save" }).click();
 
   await expect(projectRow(page, name)).toContainText("0 / 2.8");
@@ -136,6 +140,7 @@ test("a skill picked in a phase is hidden from its other rows but offered in oth
   await page.getByLabel("Name", { exact: true }).fill(`Skill Catalog ${suffix}`);
   await addSkillRequirement(page, { id: alpha });
   await addSkillRequirement(page, { id: beta });
+  await addDateRange(page, FAR_FUTURE[0].start, FAR_FUTURE[0].end);
   await page.getByRole("button", { name: "Save" }).click();
   await page.getByRole("heading", { name: `Skill Catalog ${suffix}` }).waitFor();
 
@@ -279,7 +284,7 @@ test("three people at 40% leave a 3-FTE project incomplete", async ({ page }) =>
   const requirements = [{ id: "general", min_level: 0, fte: 3 }];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${projectId},${projectName},,high,${quote(requirements)},[],[]`,
+    `${projectId},${projectName},,high,${quote(requirements)},${quote(FAR_FUTURE)},[]`,
   ].join("\n");
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({
@@ -468,7 +473,7 @@ test("importing a CSV adds new projects and reports the result", async ({ page }
   const requirements = [{ id: "python", min_level: 3, fte: 2, max_people: 3 }];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${projectId},${name},Imported from CSV,high,${quote(requirements)},[],[]`,
+    `${projectId},${name},Imported from CSV,high,${quote(requirements)},${quote(FAR_FUTURE)},[]`,
   ].join("\n");
 
   await page.locator('input[type="file"]').setInputFiles({
@@ -491,7 +496,18 @@ test("importing a CSV adds new projects and reports the result", async ({ page }
 //   Echo     high      2026-12-01 → 2027-01-15  1    0
 //   Foxtrot  low       2027-01-01 → 2027-01-31  1    0
 //   Golf     low       unscheduled              1    0
-async function seedSortableProjects(page: Page, { staff }: { staff: boolean }): Promise<string> {
+// `legacy` projects are served alongside them, ids and names suffixed the same way.
+interface LegacyProject {
+  key: string;
+  name: string;
+  priority: string;
+  phases: unknown[];
+}
+
+async function seedSortableProjects(
+  page: Page,
+  { staff, legacy = [] }: { staff: boolean; legacy?: LegacyProject[] },
+): Promise<string> {
   const suffix = uniqueSuffix();
   const needs = (fte: number) => quote([{ id: "general", min_level: 0, fte }]);
   const dates = (start: string, end: string) => quote([{ start, end }]);
@@ -499,10 +515,8 @@ async function seedSortableProjects(page: Page, { staff }: { staff: boolean }): 
     ["alpha", "Alpha", "medium", needs(1), dates("2027-02-01", "2027-02-28")],
     ["bravo", "Bravo", "critical", needs(2), dates("2027-03-01", "2027-06-30")],
     ["charlie", "Charlie", "critical", needs(1), dates("2027-01-01", "2027-12-31")],
-    ["delta", "Delta", "low", needs(1), "[]"],
     ["echo", "Echo", "high", needs(1), dates("2026-12-01", "2027-01-15")],
     ["foxtrot", "Foxtrot", "low", needs(1), dates("2027-01-01", "2027-01-31")],
-    ["golf", "Golf", "low", needs(1), "[]"],
   ];
   const csv = [
     PROJECT_CSV_HEADER,
@@ -517,7 +531,40 @@ async function seedSortableProjects(page: Page, { staff }: { staff: boolean }): 
     mimeType: "text/csv",
     buffer: Buffer.from(csv),
   });
-  await expect(page.getByText(/Import complete — created 7\./)).toBeVisible();
+  await expect(page.getByText(/Import complete — created 5\./)).toBeVisible();
+
+  // The API no longer saves projects without dates, so the unscheduled ones are served as if
+  // they had been stored before dates became required.
+  const undated = [
+    {
+      id: "main",
+      skill_requirements: [{ id: "general", description: "", min_level: 0, fte: 1, max_people: 1 }],
+      date_range: null,
+    },
+  ];
+  const served: LegacyProject[] = [
+    { key: "delta", name: "Delta", priority: "low", phases: undated },
+    { key: "golf", name: "Golf", priority: "low", phases: undated },
+    ...legacy,
+  ];
+  await page.route("**/api/v1/projects/", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    const projects = await response.json();
+    for (const { key, name, priority, phases } of served) {
+      projects.push({
+        ...projects[0],
+        id: `${key}-${suffix}`,
+        name: `${name} ${suffix}`,
+        description: "",
+        priority,
+        phases,
+        completed_at: null,
+        start_window: null,
+      });
+    }
+    await route.fulfill({ response, json: projects });
+  });
 
   if (staff) {
     const personName = `Dorothy Vaughan ${suffix}`;
@@ -658,30 +705,20 @@ test("the project list sorts by priority, dates and staffing in both directions"
 });
 
 test("a project requesting no FTE stays last on the staffing sort", async ({ page }) => {
-  const suffix = await seedSortableProjects(page, { staff: false });
   // The API rejects projects without skill requirements, so only legacy data has 0 FTE.
-  await page.route("**/api/v1/projects/", async (route) => {
-    if (route.request().method() !== "GET") return route.continue();
-    const response = await route.fetch();
-    const projects = await response.json();
-    projects.push({
-      ...projects[0],
-      id: `hotel-${suffix}`,
-      name: `Hotel ${suffix}`,
-      description: "",
-      priority: "critical",
-      phases: [
-        {
-          id: "main",
-          skill_requirements: [],
-          date_range: { start: "2026-12-01", end: "2026-12-31" },
-        },
-      ],
-      completed_at: null,
-      start_window: null,
-    });
-    await route.fulfill({ response, json: projects });
-  });
+  const hotel = {
+    key: "hotel",
+    name: "Hotel",
+    priority: "critical",
+    phases: [
+      {
+        id: "main",
+        skill_requirements: [],
+        date_range: { start: "2026-12-01", end: "2026-12-31" },
+      },
+    ],
+  };
+  const suffix = await seedSortableProjects(page, { staff: false, legacy: [hotel] });
   await page.goto(`/projects?q=${suffix}&sort=staffing`);
 
   // All other projects are at 0%, so they keep the same tie-break order both ways.

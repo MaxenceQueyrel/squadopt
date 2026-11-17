@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { addSkillRequirement, attentionRow, uniqueSuffix } from "./helpers";
+import { addDateRange, addSkillRequirement, attentionRow, uniqueSuffix } from "./helpers";
 
 test("a project created from the overview shows up as unstaffed", async ({ page }) => {
   const name = `Nova Redesign ${uniqueSuffix()}`;
@@ -9,10 +9,11 @@ test("a project created from the overview shows up as unstaffed", async ({ page 
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByLabel("Name", { exact: true }).fill(name);
   await addSkillRequirement(page, { id: "general" });
+  await addDateRange(page, "2099-01-01", "2099-01-31");
   await page.getByRole("button", { name: "Save" }).click();
 
   const row = await attentionRow(page, `${name} has nobody assigned`);
-  await expect(row).toContainText("0 / 1 FTE staffed · no dates set");
+  await expect(row).toContainText("0 / 1 FTE staffed · 1 Jan 2099 → 31 Jan 2099");
   await row.getByRole("link", { name: "Staff it" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 });

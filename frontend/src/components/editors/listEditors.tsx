@@ -215,6 +215,7 @@ export function DateRangeEditor({
         type="date"
         aria-label="Start"
         value={value.start}
+        max={value.end}
         onChange={(e) => onChange({ ...value, start: e.target.value })}
         style={{ ...inputStyle, flex: 1 }}
       />
@@ -223,6 +224,7 @@ export function DateRangeEditor({
         type="date"
         aria-label="End"
         value={value.end}
+        min={value.start}
         onChange={(e) => onChange({ ...value, end: e.target.value })}
         style={{ ...inputStyle, flex: 1 }}
       />
@@ -249,6 +251,7 @@ export function AvailabilityEditor({
             type="date"
             aria-label="Window start"
             value={w.start}
+            max={w.end}
             onChange={(e) => update(i, { start: e.target.value })}
             style={{ ...inputStyle, flex: 1 }}
           />
@@ -257,6 +260,7 @@ export function AvailabilityEditor({
             type="date"
             aria-label="Window end"
             value={w.end}
+            min={w.start}
             onChange={(e) => update(i, { end: e.target.value })}
             style={{ ...inputStyle, flex: 1 }}
           />

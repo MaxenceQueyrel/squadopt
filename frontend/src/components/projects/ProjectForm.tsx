@@ -20,7 +20,7 @@ function emptyDraft(): ProjectDraft {
 }
 
 /** Modal form to create a project or edit its phases and constraints. A project always has at
- * least one phase, each with its own skill requirements and at most one date range. */
+ * least one phase, each with its own skill requirements and one date range. */
 export function ProjectForm({
   project,
   skillOptions,
@@ -37,7 +37,6 @@ export function ProjectForm({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasDates = draft.phases.some((phase) => phase.date_range !== null);
   const set = <K extends keyof ProjectDraft>(key: K, val: ProjectDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: val }));
   const setStartWindow = (patch: Partial<DateRange>) => {
@@ -72,8 +71,28 @@ export function ProjectForm({
         return;
       }
     }
+    for (const phase of draft.phases) {
+      const range = phase.date_range;
+      if (!range) {
+        setError("Add a date range to every phase.");
+        return;
+      }
+      if (!range.start || !range.end) {
+        setError(`Fill in both start and end of phase "${phase.id.trim()}".`);
+        return;
+      }
+      // The pickers' min/max only constrain the calendar; a date can still be typed out of order.
+      if (range.end < range.start) {
+        setError(`Phase "${phase.id.trim()}" ends before it starts.`);
+        return;
+      }
+    }
     if (draft.start_window && (!draft.start_window.start || !draft.start_window.end)) {
       setError("Fill in both earliest and latest start, or leave both empty.");
+      return;
+    }
+    if (draft.start_window && draft.start_window.end < draft.start_window.start) {
+      setError("Latest start must not be before earliest start.");
       return;
     }
     setSaving(true);
@@ -143,26 +162,20 @@ export function ProjectForm({
         />
       </Field>
 
-      {/* A saved window stays editable after its dates are removed so it can be cleared. */}
-      <fieldset
-        disabled={!hasDates && draft.start_window === null}
-        style={{ border: "none", padding: 0, margin: 0 }}
-      >
+      <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
         <legend style={{ padding: 0, fontSize: "0.82rem", fontWeight: 600, marginBottom: 5 }}>
           Flexible start
         </legend>
         <div style={{ fontSize: "0.78rem", color: colors.muted, marginBottom: 5 }}>
-          {hasDates
-            ? "The optimizer tries a weekly start between these dates and moves the whole schedule with it. Leave both empty to keep the dates fixed."
-            : draft.start_window
-              ? "The project has no dates left to move. Clear the earliest and latest start, or add a date range back."
-              : "Add a date range to a phase before making the project's start flexible."}
+          The optimizer tries a weekly start between these dates and moves the whole schedule with
+          it. Leave both empty to keep the phase dates fixed.
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 1rem" }}>
           <Field label="Earliest start">
             <input
               type="date"
               value={draft.start_window?.start ?? ""}
+              max={draft.start_window?.end}
               onChange={(e) => setStartWindow({ start: e.target.value })}
               style={inputStyle}
             />
@@ -171,6 +184,7 @@ export function ProjectForm({
             <input
               type="date"
               value={draft.start_window?.end ?? ""}
+              min={draft.start_window?.start}
               onChange={(e) => setStartWindow({ end: e.target.value })}
               style={inputStyle}
             />
