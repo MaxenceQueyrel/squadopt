@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,11 +11,13 @@ from api.models.role import Role as RoleCatalogEntry
 from api.models.team import Team
 from api.repositories.file_repository import FileRepository
 from api.v1 import assignments as assignments_module
+from api.v1 import optimization as optimization_module
 from api.v1 import people as people_module
 from api.v1 import projects as projects_module
 from api.v1 import roles as roles_module
 from api.v1 import teams as teams_module
-from optimizer.models import Seniority
+from optimizer.domain.solver import InfeasibleAssignmentError
+from optimizer.models import InfeasibilityReason, PhaseConflict, Seniority
 from tests.conftest import ONE_FTE_NEED
 
 
@@ -159,23 +163,20 @@ NOVEMBER = [{"start": "2026-11-01", "end": "2026-11-30"}]
 def _busy_person_setup(client, headers):
     """Creates a person fully assigned to project A, and project B overlapping it.
 
-    Both projects force-include the person, so they are proposed whenever they are
-    a feasible candidate and left out only when the solver sees them as booked.
+    The person is the only one in the organization, so they are proposed whenever
+    they are a feasible candidate and left out only when the solver sees them as
+    booked.
     """
     client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=headers)
-    person_ids = [
-        client.post(
-            "/api/v1/people/",
-            json={
-                "name": name,
-                "role": "Backend Developer",
-                "seniority": Seniority.SENIOR,
-            },
-            headers=headers,
-        ).json()["id"]
-        for name in ("Bob", "Alice")
-    ]
-    bob_id = person_ids[0]
+    bob_id = client.post(
+        "/api/v1/people/",
+        json={
+            "name": "Bob",
+            "role": "Backend Developer",
+            "seniority": Seniority.SENIOR,
+        },
+        headers=headers,
+    ).json()["id"]
     project_ids = [
         client.post(
             "/api/v1/projects/",
@@ -183,7 +184,6 @@ def _busy_person_setup(client, headers):
                 "name": name,
                 "skill_requirements": [ONE_FTE_NEED],
                 "date_ranges": NOVEMBER,
-                "included_person_ids": [bob_id],
             },
             headers=headers,
         ).json()["id"]
@@ -334,31 +334,24 @@ def test_solve_splits_a_need_on_the_allocation_grid(client, org_headers):
     assert sorted(a["ratio"] for a in applied.json()) == [0.4, 0.6]
 
 
-def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_headers):
-    client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=org_headers)
-    # A 1 FTE need goes to at most one person, so forcing two people into it can
-    # never fit.
-    member_ids = [
-        client.post(
-            "/api/v1/people/",
-            json={
-                "name": f"Member {i}",
-                "role": "Backend Developer",
-                "seniority": Seniority.SENIOR,
-            },
-            headers=org_headers,
-        ).json()["id"]
-        for i in range(2)
-    ]
-    project_id = client.post(
-        "/api/v1/projects/",
-        json={
-            "name": "Project Z",
-            "skill_requirements": [ONE_FTE_NEED],
-            "included_person_ids": member_ids,
-        },
-        headers=org_headers,
-    ).json()["id"]
+# The need is sized to what the pool can staff, so no real project is infeasible;
+# the 409 path is exercised by making the solver raise.
+CONFLICT = PhaseConflict(
+    phase_id=None,
+    reason=InfeasibilityReason.FTE_NOT_REACHABLE,
+    required_fte=1.0,
+    need_fte=1.0,
+)
+
+
+def _raise_infeasible(project, *args, **kwargs):
+    raise InfeasibleAssignmentError(project.id, [CONFLICT])
+
+
+def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(
+    client, org_headers, project_id, monkeypatch
+):
+    monkeypatch.setattr(optimization_module.solver, "solve_pool", _raise_infeasible)
 
     response = _solve(client, org_headers, project_id)
 
@@ -366,18 +359,10 @@ def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(client, org_h
     detail = response.json()["detail"]
     assert detail["project_id"] == project_id
     assert detail["message"]
-    assert detail["conflicts"] == [
-        {
-            "phase_id": None,
-            "reason": "forced_member_conflict",
-            "required_fte": 1.0,
-            "need_fte": 1.0,
-            "forced_person_ids": member_ids,
-            "person_id": None,
-            "project_ids": [],
-            "period": None,
-        }
-    ]
+    assert [
+        (c["phase_id"], c["reason"], c["required_fte"], c["need_fte"])
+        for c in detail["conflicts"]
+    ] == [(None, "fte_not_reachable", 1.0, 1.0)]
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []
 
 
@@ -435,18 +420,23 @@ def test_solve_with_window_scans_weekly_starts(client, org_headers, project_id):
     assert saved.json()["start_date"] == WEEK_1["start"]
 
 
-def test_solve_with_window_skips_infeasible_starts(client, org_headers):
+def test_solve_with_window_skips_infeasible_starts(client, org_headers, monkeypatch):
     client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=org_headers)
-    # A 1 FTE need goes to at most one person, so forcing two people into it only
-    # fits once one of them is away.
-    leaving_id = _create_person(client, org_headers, "Leaving", [WEEK_2, WEEK_3])
+    _create_person(client, org_headers, "Leaving", [WEEK_2, WEEK_3])
     staying_id = _create_person(client, org_headers, "Staying")
+    real_solve = optimization_module.solver.solve
+
+    def solve_unless_first_week(project, *args, **kwargs):
+        if project.date_ranges[0].start == date.fromisoformat(WEEK_1["start"]):
+            _raise_infeasible(project)
+        return real_solve(project, *args, **kwargs)
+
+    monkeypatch.setattr(optimization_module.solver, "solve", solve_unless_first_week)
     project_id = client.post(
         "/api/v1/projects/",
         json={
             "name": "Project W",
             "skill_requirements": [ONE_FTE_NEED],
-            "included_person_ids": [leaving_id, staying_id],
             "date_ranges": [WEEK_1],
             "start_window": WINDOW,
         },
@@ -521,18 +511,16 @@ def test_start_candidates_carry_their_team_and_can_be_applied(client, org_header
 
 
 def test_solve_with_window_returns_409_when_every_start_is_infeasible(
-    client, org_headers
+    client, org_headers, monkeypatch
 ):
     client.post("/api/v1/roles/", json={"id": "Backend Developer"}, headers=org_headers)
-    # A 1 FTE need goes to at most one person, so forcing two people into it can
-    # never fit.
-    forced_ids = [_create_person(client, org_headers, f"Forced {i}") for i in range(2)]
+    _create_person(client, org_headers, "Solo")
+    monkeypatch.setattr(optimization_module.solver, "solve", _raise_infeasible)
     project_id = client.post(
         "/api/v1/projects/",
         json={
             "name": "Project Z",
             "skill_requirements": [ONE_FTE_NEED],
-            "included_person_ids": forced_ids,
             "date_ranges": [WEEK_1],
             "start_window": WINDOW,
         },
@@ -544,5 +532,5 @@ def test_solve_with_window_returns_409_when_every_start_is_infeasible(
     assert response.status_code == 409
     detail = response.json()["detail"]
     assert detail["project_id"] == project_id
-    assert [c["reason"] for c in detail["conflicts"]] == ["forced_member_conflict"]
+    assert [c["reason"] for c in detail["conflicts"]] == ["fte_not_reachable"]
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []

@@ -32,8 +32,6 @@ def _create_project(client, headers, **overrides):
             },
             {"id": "sql", "description": "SQL", "min_level": 2.5, "fte": 1.0},
         ],
-        "excluded_person_ids": ["p-carol"],
-        "included_person_ids": ["p-alice"],
         "date_ranges": [{"start": "2026-07-01", "end": "2026-09-30"}],
         "phases": [],
         **overrides,
@@ -58,8 +56,6 @@ _CSV_FIELDNAMES = (
     "priority",
     "completed_at",
     "skill_requirements",
-    "excluded_person_ids",
-    "included_person_ids",
     "date_ranges",
     "phases",
     "start_window",
@@ -74,8 +70,6 @@ def _row_values(**overrides):
         "priority": "medium",
         "completed_at": "",
         "skill_requirements": json.dumps([ONE_FTE_NEED]),
-        "excluded_person_ids": "[]",
-        "included_person_ids": "[]",
         "date_ranges": "[]",
         "phases": "[]",
         "start_window": "",
@@ -184,11 +178,10 @@ def test_import_fails_closed_on_partial_bad_row(client, org_headers):
     assert client.get("/api/v1/projects/good", headers=org_headers).status_code == 404
 
 
-def test_import_does_not_validate_skill_or_person_ids(client, org_headers):
-    """Unlike People import, referenced skill/person ids are stored as-is."""
+def test_import_does_not_validate_skill_ids(client, org_headers):
+    """Unlike People import, referenced skill ids are stored as-is."""
     csv_text = _csv_row(
         skill_requirements='[{"id": "ghost-skill", "min_level": 2.0, "fte": 1.0}]',
-        excluded_person_ids='["ghost-person"]',
     )
 
     response = _upload_csv(client, org_headers, csv_text)
@@ -196,7 +189,6 @@ def test_import_does_not_validate_skill_or_person_ids(client, org_headers):
     assert response.status_code == 200
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert project["skill_requirements"][0]["id"] == "ghost-skill"
-    assert project["excluded_person_ids"] == ["ghost-person"]
 
 
 def test_export_round_trips_through_import(client, org_headers):
@@ -237,7 +229,7 @@ def test_export_round_trips_through_import(client, org_headers):
         f"/api/v1/projects/{atlas['id']}", headers=other_org_headers
     ).json()
     assert imported_atlas["name"] == "Atlas Migration"
-    assert imported_atlas["included_person_ids"] == ["p-alice"]
+    assert imported_atlas["date_ranges"] == atlas["date_ranges"]
     assert imported_atlas["skill_requirements"] == atlas["skill_requirements"]
     imported_nova = client.get(
         f"/api/v1/projects/{nova['id']}", headers=other_org_headers
@@ -281,7 +273,7 @@ def test_import_accepts_legacy_csv_without_completed_at_column(client, org_heade
     skills_cell = '"[{""id"": ""general"", ""min_level"": 0, ""fte"": 1}]"'
     csv_text = (
         f"{','.join(legacy_fieldnames)}\n"
-        f"proj-1,Nova Redesign,,medium,{skills_cell},[],[],[],[]\n"
+        f"proj-1,Nova Redesign,,medium,{skills_cell},[],[]\n"
     )
 
     response = _upload_csv(client, org_headers, csv_text)
@@ -388,3 +380,16 @@ def test_import_ignores_a_legacy_squads_column(client, org_headers):
     assert response.json() == {"created": ["proj-1"], "skipped": []}
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert "squads" not in project
+
+
+def test_import_ignores_legacy_inclusion_and_exclusion_columns(client, org_headers):
+    header = ",".join([*_CSV_FIELDNAMES, "excluded_person_ids", "included_person_ids"])
+    csv_text = f'{header}\n{_row_values()},"[""p-carol""]","[""p-alice""]"\n'
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    assert response.json() == {"created": ["proj-1"], "skipped": []}
+    project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
+    assert "excluded_person_ids" not in project
+    assert "included_person_ids" not in project
