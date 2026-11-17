@@ -123,15 +123,15 @@ export function formatScoreRating(
 }
 
 /** The exact score behind `formatScoreRating`, with its unclamped share of the max, e.g.
- * "Raw score: 12.34 / 29.10 (42% of theoretical max)". */
+ * "Raw score: 12.34 / 29.10 (42% of theoretical max)". Undefined when the rating is "—", so
+ * there is no details bubble next to a dash. */
 export function formatRawScore(
   score: number | null | undefined,
   maxScore: number | null | undefined,
 ): string | undefined {
-  if (score == null || maxScore == null) return undefined;
-  const raw = `Raw score: ${score.toFixed(2)} / ${maxScore.toFixed(2)}`;
-  if (maxScore <= 0) return raw;
-  return `${raw} (${Math.round((score / maxScore) * 100)}% of theoretical max)`;
+  if (score == null || maxScore == null || maxScore <= 0) return undefined;
+  const share = Math.round((score / maxScore) * 100);
+  return `Raw score: ${score.toFixed(2)} / ${maxScore.toFixed(2)} (${share}% of theoretical max)`;
 }
 
 export function formatHeadcount(count: number): string {
