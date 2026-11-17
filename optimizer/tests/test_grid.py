@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 from optimizer.constraints import feasible_people
 from optimizer.grid import floor_to_grid, floor_to_steps, is_on_grid
-from optimizer.models import AvailabilityWindow, DateRange, PersonInput, ProjectInput, Seniority, SkillRequirement
+from optimizer.models import AvailabilityWindow, DateRange, PersonInput, ProjectPhase, Seniority, SkillRequirement
 
 SPAN = DateRange(start=date(2026, 1, 5), end=date(2026, 1, 25))
 
@@ -54,6 +54,6 @@ def test_feasible_people_drops_anyone_below_one_step():
         window = AvailabilityWindow(start=SPAN.start, end=SPAN.end, ratio=ratio)
         return PersonInput(id=person_id, seniority=Seniority.SENIOR, availability_windows=[window])
 
-    project = ProjectInput(id="proj", date_ranges=[SPAN])
+    phase = ProjectPhase(id="main", date_range=SPAN)
     people = [person("tiny", 0.15), person("one_day", 0.2), person("part", 0.55)]
-    assert [p.id for p in feasible_people(project, people)] == ["one_day", "part"]
+    assert [p.id for p in feasible_people(phase, people)] == ["one_day", "part"]

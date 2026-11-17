@@ -39,17 +39,13 @@ def _person(person_id, availability=1.0, **skills):
 
 
 def _project(project_id, skill_id, fte=1.0, date_range=SPAN, priority=ProjectPriority.MEDIUM):
-    return PortfolioProject(
-        id=project_id,
-        skill_requirements=[SkillRequirement(id=skill_id, min_level=3, fte=fte)],
-        date_ranges=[date_range] if date_range else [],
-        priority=priority,
+    phase = ProjectPhase(
+        id="main", skill_requirements=[SkillRequirement(id=skill_id, min_level=3, fte=fte)], date_range=date_range
     )
+    return PortfolioProject(id=project_id, phases=[phase], priority=priority)
 
 
 def _scope_ranges(project, phase_id):
-    if phase_id is None:
-        return project.date_ranges
     phase = next(phase for phase in project.phases if phase.id == phase_id)
     return [phase.date_range] if phase.date_range else []
 

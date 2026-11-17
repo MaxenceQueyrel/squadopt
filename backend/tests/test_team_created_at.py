@@ -39,7 +39,7 @@ def test_create_team_sets_created_at(client, org_headers):
         "/api/v1/teams/",
         json={
             "project_id": project_id,
-            "members": [{"person_id": "alice", "fte_allocation": 1.0}],
+            "members": [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
             "optimization_score": 1.0,
             "optimization_max_score": 1.0,
         },
