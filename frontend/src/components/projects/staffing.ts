@@ -109,6 +109,25 @@ export function formatSkillAllocations(allocations: SkillAllocation[]): string {
   return allocations.map((a) => `${a.skill_id} ${Math.round(a.fte * 100)}%`).join(" · ");
 }
 
+/** A score as a share of its theoretical max, e.g. "26% of theoretical max". Not clamped:
+ * negative affinities can push the score below zero. "—" when there is no score or the max
+ * is zero (an empty result). */
+export function formatScoreShare(
+  score: number | null | undefined,
+  maxScore: number | null | undefined,
+): string {
+  if (score == null || maxScore == null || maxScore <= 0) return "—";
+  return `${Math.round((score / maxScore) * 100)}% of theoretical max`;
+}
+
+export function formatRawScore(
+  score: number | null | undefined,
+  maxScore: number | null | undefined,
+): string | undefined {
+  if (score == null || maxScore == null) return undefined;
+  return `Raw score: ${score.toFixed(2)} / ${maxScore.toFixed(2)}`;
+}
+
 export function formatHeadcount(count: number): string {
   return `${count} ${count === 1 ? "person" : "people"}`;
 }
