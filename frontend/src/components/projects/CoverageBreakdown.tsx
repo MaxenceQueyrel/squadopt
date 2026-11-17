@@ -36,7 +36,7 @@ function SkillRow({ skill }: { skill: SkillCoverage }) {
 }
 
 function PhaseTable({ phase, phased }: { phase: PhaseCoverage; phased: boolean }) {
-  const label = !phased || phase.phase_id === null ? "Whole project" : `Phase ${phase.phase_id}`;
+  const label = phased ? `Phase ${phase.phase_id}` : "Whole project";
   return (
     <table
       aria-label={`Coverage of ${label}`}
@@ -109,7 +109,7 @@ export function CoverageBreakdown({
         <span style={{ color: colors.muted }}>Requirement coverage</span>
       </summary>
       {coverage.map((phase) => (
-        <PhaseTable key={phase.phase_id ?? "whole-project"} phase={phase} phased={phased} />
+        <PhaseTable key={phase.phase_id} phase={phase} phased={phased} />
       ))}
     </details>
   );

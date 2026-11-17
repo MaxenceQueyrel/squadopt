@@ -3,8 +3,7 @@ import { formatFte } from "@/components/projects/staffing";
 import type { InfeasibilityDetail, PhaseConflict } from "@/types";
 
 function explain(conflict: PhaseConflict, phased: boolean): { reason: string; hint: string } {
-  const scope =
-    !phased || conflict.phase_id === null ? "the project" : `phase '${conflict.phase_id}'`;
+  const scope = phased ? `phase '${conflict.phase_id}'` : "the project";
   const need = formatFte(conflict.need_fte);
   // The solver caps the need at what the eligible pool can supply.
   const fit =

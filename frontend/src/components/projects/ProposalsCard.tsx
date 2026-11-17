@@ -171,7 +171,7 @@ function CompareProposalsModal({
 }) {
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
   const memberLabel = (m: AssignedMember) =>
-    phased ? `${m.phase_id ?? "unphased"}: ${nameOf(m.person_id)}` : nameOf(m.person_id);
+    phased ? `${m.phase_id}: ${nameOf(m.person_id)}` : nameOf(m.person_id);
   const current = staffingBaseline(
     assignments,
     proposals.flatMap((team) => team.members),

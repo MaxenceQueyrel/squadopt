@@ -9,9 +9,8 @@ import type { AssignedMember, Person, PhaseCoverage } from "@/types";
 
 function replacedScope(members: AssignedMember[], phased: boolean): string {
   const phaseIds = [...new Set(members.map((m) => m.phase_id))];
-  if (!phased || (phaseIds.length === 1 && phaseIds[0] === null)) return "the whole project";
-  const names = phaseIds.map((id) => id ?? "unphased");
-  return `${names.length === 1 ? "phase" : "phases"} ${names.join(", ")}`;
+  if (!phased) return "the whole project";
+  return `${phaseIds.length === 1 ? "phase" : "phases"} ${phaseIds.join(", ")}`;
 }
 
 // Candidate starts step weekly from the window's start, which need not be a whole number
