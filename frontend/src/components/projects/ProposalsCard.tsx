@@ -1,11 +1,11 @@
 import { Columns2 } from "lucide-react";
 import { type CSSProperties, useId, useState } from "react";
 import { formatDay } from "@/components/common/dates";
-import { Button, Card, colors, Modal } from "@/components/common/ui";
+import { Button, Card, colors, InfoTip, Modal } from "@/components/common/ui";
 import {
   formatFte,
   formatRawScore,
-  formatScoreShare,
+  formatScoreRating,
   formatSkillAllocations,
   staffingBaseline,
 } from "@/components/projects/staffing";
@@ -261,16 +261,23 @@ function CompareProposalsModal({
               <th scope="row" style={rowHeader}>
                 Score
               </th>
-              {columns.map(({ key, team }) => (
-                <td
-                  key={key}
-                  className="mono"
-                  style={cell}
-                  title={formatRawScore(team?.optimization_score, team?.optimization_max_score)}
-                >
-                  {formatScoreShare(team?.optimization_score, team?.optimization_max_score)}
-                </td>
-              ))}
+              {columns.map(({ key, title, team }) => {
+                const rawScore = formatRawScore(
+                  team?.optimization_score,
+                  team?.optimization_max_score,
+                );
+                return (
+                  <td key={key} className="mono" style={cell}>
+                    {formatScoreRating(team?.optimization_score, team?.optimization_max_score)}
+                    {rawScore && (
+                      <>
+                        {" "}
+                        <InfoTip label={`Score details for ${title}`}>{rawScore}</InfoTip>
+                      </>
+                    )}
+                  </td>
+                );
+              })}
             </tr>
             <tr>
               <th scope="row" style={rowHeader}>

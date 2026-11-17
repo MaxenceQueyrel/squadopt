@@ -54,16 +54,19 @@ import { knownSkillIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 import type { Assignment, OptimizationResponse, Project, Team, TeamProposal } from "@/types";
 
-// Expressed as a share of max_score rather than of the best score: the best score can be
-// zero or negative (negative affinities), while max_score is shared by the whole pool.
+// On the same 0–5 scale as the score (a share of max_score) rather than relative to the best
+// score: the best score can be zero or negative (negative affinities), while max_score is
+// shared by the whole pool. Two decimals, unlike the score's one, so close teams still differ.
 // A team at another start can outscore the best when the best wins on coverage instead.
 function deltaVsBest(proposal: TeamProposal, best: Team): string {
   const maxScore = proposal.optimization_max_score;
   const loss =
-    maxScore > 0 ? ((best.optimization_score ?? 0) - proposal.optimization_score) / maxScore : 0;
-  const percent = (Math.abs(loss) * 100).toFixed(1);
-  if (percent === "0.0") return "same score as best";
-  return `${loss > 0 ? "−" : "+"}${percent}% vs best`;
+    maxScore > 0
+      ? (((best.optimization_score ?? 0) - proposal.optimization_score) / maxScore) * 5
+      : 0;
+  const amount = Math.abs(loss).toFixed(2);
+  if (amount === "0.00") return "same score as best";
+  return `${loss > 0 ? "−" : "+"}${amount} vs best`;
 }
 
 type ProjectTab = "staffing" | "proposals";

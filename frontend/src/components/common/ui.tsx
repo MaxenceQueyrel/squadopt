@@ -1,6 +1,7 @@
 import {
   ChevronDown,
   Ellipsis,
+  Info,
   type LucideIcon,
   Search,
   Signal,
@@ -15,6 +16,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -109,6 +111,66 @@ export function useDismiss(
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [ref, open, onDismiss]);
+}
+
+/** An info icon that shows `children` in a small bubble while hovered, focused or tapped, and
+ * closes on Escape or a press outside. The bubble is always the trigger's accessible
+ * description, so screen readers announce it after `label` without opening it. */
+export function InfoTip({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  const tipId = useId();
+  useDismiss(ref, open, () => setOpen(false));
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover covers the trigger and the bubble so the pointer can move onto it; keyboard users open it by focusing the button
+    <span
+      ref={ref}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      style={{ position: "relative", display: "inline-flex", verticalAlign: "middle" }}
+    >
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm btn-icon"
+        aria-label={label}
+        aria-describedby={tipId}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          // Keeps an enclosing Modal open: the first Escape only closes the bubble.
+          if (e.key === "Escape" && open) {
+            e.stopPropagation();
+            setOpen(false);
+          }
+        }}
+        style={{ padding: 2 }}
+      >
+        <Info size={14} aria-hidden />
+      </button>
+      {/* No gap below the trigger, so the pointer can move onto the bubble without closing it. */}
+      <span
+        role="tooltip"
+        id={tipId}
+        hidden={!open}
+        style={{
+          ...popoverStyle,
+          top: "100%",
+          left: 0,
+          minWidth: 0,
+          padding: "0.4rem 0.6rem",
+          whiteSpace: "nowrap",
+          fontFamily: fonts.sans,
+          fontSize: "0.8rem",
+          fontWeight: 400,
+          color: colors.text,
+        }}
+      >
+        {children}
+      </span>
+    </span>
+  );
 }
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";

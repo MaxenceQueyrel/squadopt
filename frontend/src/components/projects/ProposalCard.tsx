@@ -2,9 +2,9 @@ import { Check, Trash2, X } from "lucide-react";
 import { useId, useState } from "react";
 import { daysBetween, formatDay } from "@/components/common/dates";
 import { TeamMembers } from "@/components/common/TeamMembers";
-import { Button, Card, colors, IconButton, Modal } from "@/components/common/ui";
+import { Button, Card, colors, IconButton, InfoTip, Modal } from "@/components/common/ui";
 import { CoverageBreakdown } from "@/components/projects/CoverageBreakdown";
-import { formatRawScore, formatScoreShare } from "@/components/projects/staffing";
+import { formatRawScore, formatScoreRating } from "@/components/projects/staffing";
 import { errorMessage } from "@/services/api";
 import type { AssignedMember, Person, PhaseCoverage } from "@/types";
 
@@ -60,6 +60,7 @@ export function ProposalCard({
   onClose?: () => void;
 }) {
   const headingId = useId();
+  const rawScore = formatRawScore(score, maxScore);
   const [confirming, setConfirming] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,13 +126,15 @@ export function ProposalCard({
         </div>
         <p style={{ margin: "0.4rem 0 0.75rem", fontSize: "0.875rem", color: colors.muted }}>
           Optimization score:{" "}
-          <strong
-            className="mono"
-            style={{ color: colors.text }}
-            title={formatRawScore(score, maxScore)}
-          >
-            {formatScoreShare(score, maxScore)}
+          <strong className="mono" style={{ color: colors.text }}>
+            {formatScoreRating(score, maxScore)}
           </strong>
+          {rawScore && (
+            <>
+              {" "}
+              <InfoTip label="Score details">{rawScore}</InfoTip>
+            </>
+          )}
           {scoreNote && <span style={{ color: colors.muted }}> · {scoreNote}</span>}
         </p>
         {shift && (
