@@ -334,18 +334,17 @@ export default function PeoplePage() {
               </Button>
             )
           }
-          isEmpty={roleCounts.length === 0}
-          empty="No roles yet."
-        >
-          {roleCounts.map(({ id, count }) => (
+          kind="role"
+          items={roleCounts}
+          renderRow={({ id, count }) => (
             <SummaryRow key={id}>
               <span style={{ flex: 1 }}>{id}</span>
               <span style={{ color: colors.muted, fontSize: "0.85rem" }}>
                 {formatHeadcount(count)}
               </span>
             </SummaryRow>
-          ))}
-        </SummaryCard>
+          )}
+        />
         <SummaryCard
           title="Skill coverage"
           subtitle="Who can do what, and where you're thin"
@@ -356,10 +355,9 @@ export default function PeoplePage() {
               </Button>
             )
           }
-          isEmpty={coverage.length === 0}
-          empty="No skills yet."
-        >
-          {coverage.map(({ id, holders }) => (
+          kind="skill"
+          items={coverage}
+          renderRow={({ id, holders }) => (
             <SummaryRow key={id}>
               <span style={{ width: "30%", flexShrink: 0, overflowWrap: "anywhere" }}>{id}</span>
               {holders.length === 0 ? (
@@ -379,8 +377,8 @@ export default function PeoplePage() {
                 {holders.length}
               </span>
             </SummaryRow>
-          ))}
-        </SummaryCard>
+          )}
+        />
       </div>
 
       {catalogKind && (
@@ -402,21 +400,24 @@ export default function PeoplePage() {
   );
 }
 
-function SummaryCard({
+function SummaryCard<T extends { id: string }>({
   title,
   subtitle,
   action,
-  isEmpty,
-  empty,
-  children,
+  kind,
+  items,
+  renderRow,
 }: {
   title: string;
   subtitle: string;
   action: ReactNode;
-  isEmpty: boolean;
-  empty: string;
-  children: ReactNode;
+  kind: CatalogKind;
+  items: T[];
+  renderRow: (item: T) => ReactNode;
 }) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const visible = needle ? items.filter((item) => item.id.toLowerCase().includes(needle)) : items;
   return (
     <Card style={{ padding: "1.25rem 1.5rem" }}>
       <div
@@ -436,12 +437,26 @@ function SummaryCard({
         </div>
         {action}
       </div>
-      {isEmpty ? (
+      {(items.length > 0 || query) && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={`Search ${kind}s`}
+          style={{ marginBottom: "0.75rem" }}
+        />
+      )}
+      {items.length === 0 ? (
         <SummaryRow>
-          <span style={{ color: colors.muted }}>{empty}</span>
+          <span style={{ color: colors.muted }}>No {kind}s yet.</span>
+        </SummaryRow>
+      ) : visible.length === 0 ? (
+        <SummaryRow>
+          <span style={{ color: colors.muted }}>
+            No {kind}s match "{query.trim()}".
+          </span>
         </SummaryRow>
       ) : (
-        children
+        visible.map(renderRow)
       )}
     </Card>
   );
