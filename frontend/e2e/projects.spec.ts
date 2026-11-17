@@ -37,7 +37,9 @@ test("the project form sums per-skill FTE and keeps max people in range", async 
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("alert")).toHaveText("Add at least one skill requirement.");
+  await expect(page.getByRole("alert")).toHaveText(
+    "Add at least one skill requirement to every phase.",
+  );
 
   await addSkillRequirement(page, { id: "python", minLevel: 3, fte: 2 });
   const maxPeople = page.getByLabel("Max people", { exact: true });
@@ -66,7 +68,7 @@ test("the project form sums per-skill FTE and keeps max people in range", async 
   await expect(lane).toContainText("react ≥ 2 · 0.8 FTE");
 });
 
-test("adding a phase to a one-shot project keeps its criteria in the first phase", async ({
+test("a new project starts with one phase and adding a phase keeps the first one", async ({
   page,
 }) => {
   const name = `Two Stages ${uniqueSuffix()}`;
@@ -74,7 +76,7 @@ test("adding a phase to a one-shot project keeps its criteria in the first phase
   await page.goto("/projects");
   await page.getByRole("button", { name: "New project" }).click();
   await page.getByLabel("Name", { exact: true }).fill(name);
-  await expect(page.getByLabel("Phase id", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Phase id", { exact: true })).toHaveValue("main");
   await addSkillRequirement(page, { id: "python", minLevel: 3, fte: 2 });
   // Like "+ Add requirement", these buttons take their form field's label.
   await page.getByRole("button").filter({ hasText: "+ Add date range" }).click();
