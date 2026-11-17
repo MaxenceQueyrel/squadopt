@@ -45,6 +45,8 @@ test("the project form sums per-skill FTE and keeps max people in range", async 
   );
 
   await addSkillRequirement(page, { id: "python", minLevel: 3, fte: 2 });
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Add a date range to every phase.");
   const maxPeople = page.getByLabel("Max people", { exact: true });
   await expect(maxPeople.first()).toHaveValue("2");
   // Two FTE splits across two full-timers up to ten people at one day per week.

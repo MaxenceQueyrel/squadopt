@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from optimizer.grid import ALLOCATION_STEP, GRID_TOLERANCE, STEPS_PER_FTE, is_on_grid
@@ -26,6 +26,12 @@ class AssignmentBase(BaseModel):
                 "Allocation must be a multiple of 20% (one day per week), from 20% to 100%"
             )
         return round(ratio * STEPS_PER_FTE) / STEPS_PER_FTE
+
+    @model_validator(mode="after")
+    def _check_order(self) -> Self:
+        if self.end < self.start:
+            raise ValueError("End date must not be before start date")
+        return self
 
 
 class Assignment(AssignmentBase):

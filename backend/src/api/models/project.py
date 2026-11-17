@@ -82,8 +82,6 @@ class ProjectBase(BaseModel):
         window = self.start_window
         if window is None:
             return self
-        if not any(p.date_range for p in self.phases):
-            raise ValueError("A flexible start needs at least one phase date range")
         if (window.end - window.start).days // 7 + 1 > MAX_START_CANDIDATES:
             raise ValueError(
                 f"A flexible start window can span at most {MAX_START_CANDIDATES} weekly starts"

@@ -282,6 +282,44 @@ def test_update_rejects_off_grid_ratio(client, org_headers):
     assert response.status_code == 422
 
 
+def test_assignment_ending_before_it_starts_is_rejected(client, org_headers):
+    response = _create_assignment(
+        client, org_headers, start="2026-01-31", end="2026-01-01"
+    )
+
+    assert response.status_code == 422
+    assert (
+        "End date must not be before start date" in response.json()["detail"][0]["msg"]
+    )
+
+
+def test_update_rejects_assignment_ending_before_it_starts(client, org_headers):
+    created = _create_assignment(client, org_headers).json()
+
+    response = client.put(
+        f"/api/v1/assignments/{created['id']}",
+        json={
+            "person_id": "person-1",
+            "project_id": "project-1",
+            "ratio": 1.0,
+            "start": "2026-01-31",
+            "end": "2026-01-01",
+            "phase_id": "main",
+        },
+        headers=org_headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_one_day_assignment_is_accepted(client, org_headers):
+    response = _create_assignment(
+        client, org_headers, start="2026-01-15", end="2026-01-15"
+    )
+
+    assert response.status_code == 201
+
+
 def test_float_round_off_does_not_block_a_full_allocation(client, org_headers):
     # 0.2 + 0.4 + 0.4 sums to 1.0000000000000002 in floating point.
     for ratio in (0.2, 0.4, 0.4):

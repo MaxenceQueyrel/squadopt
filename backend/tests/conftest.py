@@ -121,6 +121,6 @@ def one_phase(
             "skill_requirements": [ONE_FTE_NEED]
             if skill_requirements is None
             else skill_requirements,
-            "date_range": date_range,
+            "date_range": dict(date_range),
         }
     ]
