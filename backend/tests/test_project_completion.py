@@ -7,7 +7,7 @@ from api.main import app
 from api.models.project import Project
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
-from tests.conftest import ONE_FTE_NEED
+from tests.conftest import ONE_FTE_NEED, one_phase
 
 
 @pytest.fixture
@@ -20,8 +20,7 @@ def client(tmp_path, monkeypatch):
 def _create_project(client, headers) -> dict:
     payload = {
         "name": "Atlas Migration",
-        "skill_requirements": [ONE_FTE_NEED],
-        "date_ranges": [{"start": "2026-07-01", "end": "2026-09-30"}],
+        "phases": one_phase(date_range={"start": "2026-07-01", "end": "2026-09-30"}),
     }
     response = client.post("/api/v1/projects/", json=payload, headers=headers)
     assert response.status_code == 201

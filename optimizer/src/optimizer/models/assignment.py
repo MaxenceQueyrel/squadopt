@@ -41,9 +41,7 @@ class AssignedMember(BaseModel):
     skill_allocations: list[SkillAllocation] = Field(
         default=[], description="Breakdown of fte_allocation per skill requirement, in requirement order."
     )
-    phase_id: str | None = Field(
-        default=None, description="Identifier of the phase this assignment belongs to, if the project uses phases."
-    )
+    phase_id: str = Field(description="Identifier of the phase this assignment belongs to.")
 
 
 class AssignmentResult(BaseModel):
@@ -53,9 +51,7 @@ class AssignmentResult(BaseModel):
     max_score: float = Field(
         description="Theoretical maximum score achievable for this assignment's weights and required FTE."
     )
-    coverage: list[PhaseCoverage] = Field(
-        description="FTE and skill coverage of each phase (a single phase_id=None entry for unphased projects)."
-    )
+    coverage: list[PhaseCoverage] = Field(description="FTE and skill coverage of each phase, in phase order.")
     fully_covered: bool = Field(description="Whether every phase is fully staffed and every skill requirement met.")
     start_date: date | None = Field(
         default=None,

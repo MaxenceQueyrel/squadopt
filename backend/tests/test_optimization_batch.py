@@ -16,7 +16,7 @@ from api.v1 import roles as roles_module
 from api.v1 import teams as teams_module
 from optimizer.domain.solver import InfeasibleAssignmentError, InfeasiblePortfolioError
 from optimizer.models import InfeasibilityReason, PhaseConflict, Seniority
-from tests.conftest import ONE_FTE_NEED, create_org, register_and_login
+from tests.conftest import ONE_FTE_NEED, create_org, one_phase, register_and_login
 
 
 @pytest.fixture
@@ -60,12 +60,7 @@ def _create_person(client, headers, name, **overrides) -> str:
 def _create_project(client, headers, name, **overrides) -> str:
     response = client.post(
         "/api/v1/projects/",
-        json={
-            "name": name,
-            "skill_requirements": [ONE_FTE_NEED],
-            "date_ranges": [NOVEMBER],
-            **overrides,
-        },
+        json={"name": name, "phases": one_phase(date_range=NOVEMBER), **overrides},
         headers=headers,
     )
     assert response.status_code == 201
@@ -79,6 +74,7 @@ def _assign(client, headers, person_id, project_id):
             "person_id": person_id,
             "project_id": project_id,
             "ratio": 1.0,
+            "phase_id": "main",
             **NOVEMBER,
         },
         headers=headers,
@@ -196,7 +192,9 @@ def test_solve_batch_result_applies_cleanly(client, org_headers):
         _create_person(client, org_headers, f"Person {i}")
     split_need = [{**ONE_FTE_NEED, "fte": 1.6, "max_people": 2}]
     project_ids = [
-        _create_project(client, org_headers, name, skill_requirements=split_need)
+        _create_project(
+            client, org_headers, name, phases=one_phase(split_need, NOVEMBER)
+        )
         for name in ("A", "B")
     ]
     teams = _solve_batch(client, org_headers, project_ids).json()["teams"]
@@ -243,7 +241,7 @@ def test_project_with_an_unknown_priority_is_rejected(client, org_headers):
         "/api/v1/projects/",
         json={
             "name": "Apollo",
-            "skill_requirements": [ONE_FTE_NEED],
+            "phases": one_phase(),
             "priority": "urgent",
         },
         headers=org_headers,
@@ -261,7 +259,7 @@ def test_solve_batch_returns_409_listing_only_the_infeasible_projects(
     feasible = _create_project(client, org_headers, "A")
     infeasible = _create_project(client, org_headers, "B")
     conflict = PhaseConflict(
-        phase_id=None,
+        phase_id="main",
         reason=InfeasibilityReason.FTE_NOT_REACHABLE,
         required_fte=1.0,
         need_fte=1.0,

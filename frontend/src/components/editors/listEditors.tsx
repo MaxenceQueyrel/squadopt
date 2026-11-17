@@ -196,37 +196,35 @@ export function SkillReqsEditor({
   );
 }
 
-export function DateRangesEditor({
+/** A single optional date range: an add button while unset, start and end inputs once set. */
+export function DateRangeEditor({
   value,
   onChange,
 }: {
-  value: DateRange[];
-  onChange: (v: DateRange[]) => void;
+  value: DateRange | null;
+  onChange: (v: DateRange | null) => void;
 }) {
-  const update = (i: number, patch: Partial<DateRange>) =>
-    onChange(value.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
-
+  if (!value) {
+    return <Button onClick={() => onChange({ start: "", end: "" })}>+ Add date range</Button>;
+  }
   return (
-    <div>
-      {value.map((d, i) => (
-        <div key={i} style={rowStyle}>
-          <input
-            type="date"
-            value={d.start}
-            onChange={(e) => update(i, { start: e.target.value })}
-            style={{ ...inputStyle, flex: 1 }}
-          />
-          <span style={{ color: colors.muted }}>→</span>
-          <input
-            type="date"
-            value={d.end}
-            onChange={(e) => update(i, { end: e.target.value })}
-            style={{ ...inputStyle, flex: 1 }}
-          />
-          <RemoveButton onClick={() => onChange(value.filter((_, idx) => idx !== i))} />
-        </div>
-      ))}
-      <Button onClick={() => onChange([...value, { start: "", end: "" }])}>+ Add date range</Button>
+    <div style={rowStyle}>
+      <input
+        type="date"
+        aria-label="Start"
+        value={value.start}
+        onChange={(e) => onChange({ ...value, start: e.target.value })}
+        style={{ ...inputStyle, flex: 1 }}
+      />
+      <span style={{ color: colors.muted }}>→</span>
+      <input
+        type="date"
+        aria-label="End"
+        value={value.end}
+        onChange={(e) => onChange({ ...value, end: e.target.value })}
+        style={{ ...inputStyle, flex: 1 }}
+      />
+      <RemoveButton onClick={() => onChange(null)} />
     </div>
   );
 }
@@ -413,6 +411,11 @@ export function TagSkillInput({
   );
 }
 
+export function emptyPhase(): ProjectPhase {
+  return { id: "", skill_requirements: [], date_range: null };
+}
+
+/** Cards for a project's phases. The last phase cannot be removed: a project always has one. */
 export function PhasesEditor({
   value,
   onChange,
@@ -424,6 +427,7 @@ export function PhasesEditor({
 }) {
   const update = (i: number, patch: Partial<ProjectPhase>) =>
     onChange(value.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  const labelStyle = { fontSize: "0.75rem", fontWeight: 600, margin: "0.25rem 0" } as const;
 
   return (
     <div>
@@ -443,68 +447,31 @@ export function PhasesEditor({
           >
             <input
               placeholder="phase id (e.g. design)"
+              aria-label="Phase id"
               value={phase.id}
               onChange={(e) => update(i, { id: e.target.value })}
               style={{ ...inputStyle, flex: 1 }}
             />
-            <RemoveButton onClick={() => onChange(value.filter((_, idx) => idx !== i))} />
+            {value.length > 1 && (
+              <RemoveButton onClick={() => onChange(value.filter((_, idx) => idx !== i))} />
+            )}
           </div>
 
-          <div style={{ fontSize: "0.75rem", fontWeight: 600, margin: "0.25rem 0" }}>
-            Skill requirements
-          </div>
+          <div style={labelStyle}>Skill requirements</div>
           <SkillReqsEditor
             value={phase.skill_requirements}
             onChange={(reqs) => update(i, { skill_requirements: reqs })}
             skillOptions={skillOptions}
           />
 
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: "0.8rem",
-              margin: "0.6rem 0 0.3rem",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={phase.date_range !== null}
-              onChange={(e) =>
-                update(i, { date_range: e.target.checked ? { start: "", end: "" } : null })
-              }
-            />
-            Constrain to a date range
-          </label>
-          {phase.date_range && (
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <input
-                type="date"
-                value={phase.date_range.start}
-                onChange={(e) =>
-                  update(i, { date_range: { ...phase.date_range!, start: e.target.value } })
-                }
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <span style={{ color: colors.muted }}>→</span>
-              <input
-                type="date"
-                value={phase.date_range.end}
-                onChange={(e) =>
-                  update(i, { date_range: { ...phase.date_range!, end: e.target.value } })
-                }
-                style={{ ...inputStyle, flex: 1 }}
-              />
-            </div>
-          )}
+          <div style={{ ...labelStyle, marginTop: "0.6rem" }}>Date range</div>
+          <DateRangeEditor
+            value={phase.date_range}
+            onChange={(range) => update(i, { date_range: range })}
+          />
         </div>
       ))}
-      <Button
-        onClick={() => onChange([...value, { id: "", skill_requirements: [], date_range: null }])}
-      >
-        + Add phase
-      </Button>
+      <Button onClick={() => onChange([...value, emptyPhase()])}>+ Add phase</Button>
     </div>
   );
 }

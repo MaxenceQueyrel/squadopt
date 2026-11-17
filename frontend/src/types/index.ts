@@ -78,9 +78,7 @@ export interface Project {
   id: string;
   name: string;
   description: string;
-  skill_requirements: SkillRequirement[];
-  date_ranges: DateRange[];
-  phases: ProjectPhase[];
+  phases: ProjectPhase[]; // at least one; a single phase is staffed as the whole project
   // Earliest and latest allowed start; the optimizer shifts the whole schedule within it.
   start_window: DateRange | null;
   priority: Priority;
@@ -94,7 +92,7 @@ export interface Assignment {
   ratio: number;
   start: string;
   end: string;
-  phase_id: string | null;
+  phase_id: string;
 }
 
 export interface SkillAllocation {
@@ -106,7 +104,7 @@ export interface AssignedMember {
   person_id: string;
   fte_allocation: number; // 0.2–1, the sum of skill_allocations
   skill_allocations: SkillAllocation[]; // shares > 0 in requirement order; empty for current staffing
-  phase_id: string | null;
+  phase_id: string;
 }
 
 export interface Team {
@@ -161,9 +159,9 @@ export interface SkillCoverage {
   met: boolean;
 }
 
-// One per phase in project.phases order; a project without phases has a single entry with phase_id null.
+// One per phase in project.phases order.
 export interface PhaseCoverage {
-  phase_id: string | null;
+  phase_id: string;
   required_fte: number;
   staffed_fte: number;
   available_fte: number; // what the eligible pool could supply during the phase
@@ -174,7 +172,7 @@ export interface PhaseCoverage {
 export type InfeasibilityReason = "fte_not_reachable";
 
 export interface PhaseConflict {
-  phase_id: string | null;
+  phase_id: string;
   reason: InfeasibilityReason;
   required_fte: number; // the sum of the phase's skill FTE
   need_fte: number; // FTE the solver had to staff exactly, after capping by pool capacity

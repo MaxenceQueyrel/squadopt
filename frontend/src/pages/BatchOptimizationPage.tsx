@@ -173,7 +173,7 @@ export default function BatchOptimizationPage() {
               project && (
                 <div key={detail.project_id} style={{ marginBottom: "1rem" }}>
                   <h3 style={{ margin: 0 }}>{project.name}</h3>
-                  <InfeasibilityReport detail={detail} />
+                  <InfeasibilityReport detail={detail} phased={project.phases.length > 1} />
                 </div>
               )
             );
@@ -368,6 +368,7 @@ function BatchResult({
                 fullyCovered={team.fully_covered}
                 people={people}
                 baseline={staffingBaseline(projectAssignments, team.members)}
+                phased={(project?.phases.length ?? 0) > 1}
                 startDate={team.start_date}
                 plannedStart={project ? (projectSpan(project)?.start ?? null) : null}
                 onApply={() => onApply(team.id)}

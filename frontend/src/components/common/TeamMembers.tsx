@@ -6,7 +6,8 @@ type MemberStatus = "added" | "dropped" | null;
 
 const memberKey = (m: AssignedMember) => `${m.person_id}|${m.phase_id}`;
 
-/** Renders assigned members, grouped by phase when the assignment is phased.
+/** Renders assigned members, grouped by phase when the project is `phased` (has several
+ * phases).
  *
  * When `baseline` is given, members absent from it are marked "added" and baseline
  * members absent from `members` are listed struck through as "dropped".
@@ -15,10 +16,12 @@ export function TeamMembers({
   members,
   people,
   baseline,
+  phased,
 }: {
   members: AssignedMember[];
   people: Person[];
   baseline?: AssignedMember[];
+  phased: boolean;
 }) {
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
   const roleOf = (id: string) => people.find((p) => p.id === id)?.role;
@@ -36,7 +39,6 @@ export function TeamMembers({
   ];
 
   const phases = [...new Set(rows.map((r) => r.member.phase_id))];
-  const isPhased = phases.length > 1 || (phases.length === 1 && phases[0] !== null);
 
   const renderRow = ({ member: m, status }: (typeof rows)[number], i: number) => (
     <li
@@ -75,18 +77,18 @@ export function TeamMembers({
     </li>
   );
 
-  if (!isPhased) {
+  if (!phased) {
     return <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>{rows.map(renderRow)}</ul>;
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       {phases.map((phaseId) => (
-        <div key={phaseId ?? "unassigned"}>
+        <div key={phaseId}>
           <div
             style={{ fontSize: "0.78rem", fontWeight: 600, color: colors.primary, marginBottom: 2 }}
           >
-            {phaseId ?? "Unassigned"}
+            {phaseId}
           </div>
           <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
             {rows.filter((r) => r.member.phase_id === phaseId).map(renderRow)}

@@ -2,8 +2,8 @@ import { colors } from "@/components/common/ui";
 import { formatFte } from "@/components/projects/staffing";
 import type { InfeasibilityDetail, PhaseConflict } from "@/types";
 
-function explain(conflict: PhaseConflict): { reason: string; hint: string } {
-  const scope = conflict.phase_id === null ? "the project" : `phase '${conflict.phase_id}'`;
+function explain(conflict: PhaseConflict, phased: boolean): { reason: string; hint: string } {
+  const scope = phased ? `phase '${conflict.phase_id}'` : "the project";
   const need = formatFte(conflict.need_fte);
   // The solver caps the need at what the eligible pool can supply.
   const fit =
@@ -16,8 +16,15 @@ function explain(conflict: PhaseConflict): { reason: string; hint: string } {
   };
 }
 
-/** Explains, in terms of the project's own setup, why the optimizer found no feasible team. */
-export function InfeasibilityReport({ detail }: { detail: InfeasibilityDetail }) {
+/** Explains, in terms of the project's own setup, why the optimizer found no feasible team.
+ * A project that is not `phased` (a single phase) is named as a whole rather than by phase. */
+export function InfeasibilityReport({
+  detail,
+  phased,
+}: {
+  detail: InfeasibilityDetail;
+  phased: boolean;
+}) {
   return (
     <div
       role="alert"
@@ -36,7 +43,7 @@ export function InfeasibilityReport({ detail }: { detail: InfeasibilityDetail })
       ) : (
         <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem" }}>
           {detail.conflicts.map((conflict, i) => {
-            const { reason, hint } = explain(conflict);
+            const { reason, hint } = explain(conflict, phased);
             return (
               <li key={i} style={{ marginBottom: "0.4rem" }}>
                 {reason}

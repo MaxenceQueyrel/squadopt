@@ -18,7 +18,7 @@ from api.v1 import roles as roles_module
 from api.v1 import teams as teams_module
 from optimizer.domain.solver import InfeasibleAssignmentError
 from optimizer.models import InfeasibilityReason, PhaseConflict, Seniority
-from tests.conftest import ONE_FTE_NEED
+from tests.conftest import ONE_FTE_NEED, one_phase
 
 
 @pytest.fixture
@@ -55,7 +55,7 @@ def project_id(client, org_headers):
         )
     project = client.post(
         "/api/v1/projects/",
-        json={"name": "Project X", "skill_requirements": [{**ONE_FTE_NEED, "fte": 2}]},
+        json={"name": "Project X", "phases": one_phase([{**ONE_FTE_NEED, "fte": 2}])},
         headers=org_headers,
     ).json()
     return project["id"]
@@ -182,8 +182,7 @@ def _busy_person_setup(client, headers):
             "/api/v1/projects/",
             json={
                 "name": name,
-                "skill_requirements": [ONE_FTE_NEED],
-                "date_ranges": NOVEMBER,
+                "phases": one_phase(date_range=NOVEMBER[0]),
             },
             headers=headers,
         ).json()["id"]
@@ -195,6 +194,7 @@ def _busy_person_setup(client, headers):
             "person_id": bob_id,
             "project_id": project_ids[0],
             "ratio": 1.0,
+            "phase_id": "main",
             **NOVEMBER[0],
         },
         headers=headers,
@@ -233,7 +233,7 @@ def test_solve_reports_coverage_for_best_and_alternatives(
         assert proposal["fully_covered"] is True
         assert proposal["coverage"] == [
             {
-                "phase_id": None,
+                "phase_id": "main",
                 "required_fte": 2.0,
                 "staffed_fte": 2.0,
                 "available_fte": 6.0,
@@ -269,7 +269,7 @@ def test_solve_reports_unmet_skill_and_persists_coverage(client, org_headers):
         "/api/v1/projects/",
         json={
             "name": "Project Y",
-            "skill_requirements": [{"id": "python", "min_level": 2, "fte": 2}],
+            "phases": one_phase([{"id": "python", "min_level": 2, "fte": 2}]),
         },
         headers=org_headers,
     ).json()["id"]
@@ -318,8 +318,7 @@ def test_solve_splits_a_need_on_the_allocation_grid(client, org_headers):
         "/api/v1/projects/",
         json={
             "name": "Project S",
-            "skill_requirements": [{**ONE_FTE_NEED, "max_people": 2}],
-            "date_ranges": NOVEMBER,
+            "phases": one_phase([{**ONE_FTE_NEED, "max_people": 2}], NOVEMBER[0]),
         },
         headers=org_headers,
     ).json()["id"]
@@ -337,7 +336,7 @@ def test_solve_splits_a_need_on_the_allocation_grid(client, org_headers):
 # The need is sized to what the pool can staff, so no real project is infeasible;
 # the 409 path is exercised by making the solver raise.
 CONFLICT = PhaseConflict(
-    phase_id=None,
+    phase_id="main",
     reason=InfeasibilityReason.FTE_NOT_REACHABLE,
     required_fte=1.0,
     need_fte=1.0,
@@ -362,7 +361,7 @@ def test_solve_returns_409_with_conflicts_when_no_team_is_feasible(
     assert [
         (c["phase_id"], c["reason"], c["required_fte"], c["need_fte"])
         for c in detail["conflicts"]
-    ] == [(None, "fte_not_reachable", 1.0, 1.0)]
+    ] == [("main", "fte_not_reachable", 1.0, 1.0)]
     assert client.get("/api/v1/teams/", headers=org_headers).json() == []
 
 
@@ -397,7 +396,11 @@ def test_solve_with_window_scans_weekly_starts(client, org_headers, project_id):
     project = client.get(f"/api/v1/projects/{project_id}", headers=org_headers).json()
     client.put(
         f"/api/v1/projects/{project_id}",
-        json={**project, "date_ranges": [WEEK_1], "start_window": WINDOW},
+        json={
+            **project,
+            "phases": [{**project["phases"][0], "date_range": WEEK_1}],
+            "start_window": WINDOW,
+        },
         headers=org_headers,
     )
 
@@ -427,7 +430,7 @@ def test_solve_with_window_skips_infeasible_starts(client, org_headers, monkeypa
     real_solve = optimization_module.solver.solve
 
     def solve_unless_first_week(project, *args, **kwargs):
-        if project.date_ranges[0].start == date.fromisoformat(WEEK_1["start"]):
+        if project.phases[0].date_range.start == date.fromisoformat(WEEK_1["start"]):
             _raise_infeasible(project)
         return real_solve(project, *args, **kwargs)
 
@@ -436,8 +439,7 @@ def test_solve_with_window_skips_infeasible_starts(client, org_headers, monkeypa
         "/api/v1/projects/",
         json={
             "name": "Project W",
-            "skill_requirements": [ONE_FTE_NEED],
-            "date_ranges": [WEEK_1],
+            "phases": one_phase(date_range=WEEK_1),
             "start_window": WINDOW,
         },
         headers=org_headers,
@@ -473,8 +475,7 @@ def test_start_candidates_carry_their_team_and_can_be_applied(client, org_header
         "/api/v1/projects/",
         json={
             "name": "Project V",
-            "skill_requirements": [ONE_FTE_NEED],
-            "date_ranges": [WEEK_1],
+            "phases": one_phase(date_range=WEEK_1),
             "start_window": WINDOW,
         },
         headers=org_headers,
@@ -507,7 +508,7 @@ def test_start_candidates_carry_their_team_and_can_be_applied(client, org_header
         (late_id, WEEK_3["start"])
     ]
     project = client.get(f"/api/v1/projects/{project_id}", headers=org_headers).json()
-    assert project["date_ranges"] == [WEEK_3]
+    assert project["phases"][0]["date_range"] == WEEK_3
 
 
 def test_solve_with_window_returns_409_when_every_start_is_infeasible(
@@ -520,8 +521,7 @@ def test_solve_with_window_returns_409_when_every_start_is_infeasible(
         "/api/v1/projects/",
         json={
             "name": "Project Z",
-            "skill_requirements": [ONE_FTE_NEED],
-            "date_ranges": [WEEK_1],
+            "phases": one_phase(date_range=WEEK_1),
             "start_window": WINDOW,
         },
         headers=org_headers,

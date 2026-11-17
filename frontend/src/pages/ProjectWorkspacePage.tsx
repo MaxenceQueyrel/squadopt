@@ -170,7 +170,7 @@ export default function ProjectWorkspacePage() {
   const status = projectStatus(project, lanes, today);
   const span = projectSpan(project);
   const endedButOpen = status === "ended";
-  const phased = project.phases.length > 0;
+  const phased = project.phases.length > 1;
   // The store keeps teams in creation order.
   const proposals = teams.filter((t) => t.project_id === project.id).reverse();
   const reviewIndex = proposals.findIndex((t) => t.id === reviewingId);
@@ -340,7 +340,7 @@ export default function ProjectWorkspacePage() {
             <StaffingLaneCard
               key={lane.key}
               lane={lane}
-              title={phased ? lane.label : "Staffing"}
+              title={lanes.length > 1 ? lane.label : "Staffing"}
               people={people}
               today={today}
               onAssign={async (data) => {
@@ -425,6 +425,7 @@ export default function ProjectWorkspacePage() {
                       scoreNote={deltaVsBest(selectedTeam, result.best)}
                       people={people}
                       baseline={staffingBaseline(assignments, selectedTeam.members)}
+                      phased={phased}
                       startDate={selectedTeam.start_date}
                       plannedStart={span?.start ?? null}
                       onApply={() => applyProposal(selectedTeam, `start-${selectedStart}`)}
@@ -441,6 +442,7 @@ export default function ProjectWorkspacePage() {
                         fullyCovered={result.best.fully_covered}
                         people={people}
                         baseline={staffingBaseline(assignments, result.best.members)}
+                        phased={phased}
                         startDate={result.best.start_date}
                         plannedStart={span?.start ?? null}
                         onApply={() => applyTeam(result.best.id)}
@@ -477,6 +479,7 @@ export default function ProjectWorkspacePage() {
                                   scoreNote={deltaVsBest(proposal, result.best)}
                                   people={people}
                                   baseline={staffingBaseline(assignments, proposal.members)}
+                                  phased={phased}
                                   startDate={proposal.start_date}
                                   plannedStart={span?.start ?? null}
                                   onApply={() => applyProposal(proposal, `alternative-${i}`)}
@@ -501,6 +504,7 @@ export default function ProjectWorkspacePage() {
                   fullyCovered={reviewed.fully_covered}
                   people={people}
                   baseline={staffingBaseline(assignments, reviewed.members)}
+                  phased={phased}
                   startDate={reviewed.start_date}
                   plannedStart={span?.start ?? null}
                   onApply={() => applyTeam(reviewed.id)}
@@ -524,6 +528,7 @@ export default function ProjectWorkspacePage() {
               people={people}
               assignments={assignments}
               totalFte={total}
+              phased={phased}
               today={today}
               reviewingId={reviewingId}
               onReview={setReviewingId}

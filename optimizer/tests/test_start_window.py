@@ -41,18 +41,15 @@ def _person(
     )
 
 
-def _project(**update):
-    return ProjectInput(
-        id="proj-test",
-        skill_requirements=[SkillRequirement(id="python", min_level=4, fte=1.0)],
-        date_ranges=[WEEK_1],
-    ).model_copy(update=update)
+def _project(skill_requirements=None, date_range=WEEK_1):
+    requirements = skill_requirements or [SkillRequirement(id="python", min_level=4, fte=1.0)]
+    phase = ProjectPhase(id="main", skill_requirements=requirements, date_range=date_range)
+    return ProjectInput(id="proj-test", phases=[phase])
 
 
-def test_anchor_is_earliest_date_across_top_level_and_phase_ranges():
+def test_anchor_is_earliest_date_across_phase_ranges():
     project = ProjectInput(
         id="proj-test",
-        date_ranges=[DateRange(start=date(2026, 2, 2), end=date(2026, 2, 20))],
         phases=[
             ProjectPhase(id="build", date_range=DateRange(start=date(2026, 2, 9), end=date(2026, 2, 27))),
             ProjectPhase(id="discovery", date_range=DateRange(start=date(2026, 1, 26), end=date(2026, 2, 6))),
@@ -69,7 +66,6 @@ def test_anchor_of_an_undated_project_is_none():
 def test_shift_moves_every_range_by_the_same_offset():
     project = ProjectInput(
         id="proj-test",
-        date_ranges=[WEEK_1, WEEK_3],
         phases=[
             ProjectPhase(id="a", date_range=WEEK_1),
             ProjectPhase(id="b", date_range=DateRange(start=date(2026, 1, 15), end=date(2026, 2, 3))),
@@ -80,12 +76,12 @@ def test_shift_moves_every_range_by_the_same_offset():
 
     shifted = shift_project(project, offset)
 
-    original = project.date_ranges + [p.date_range for p in project.phases if p.date_range]
-    moved = shifted.date_ranges + [p.date_range for p in shifted.phases if p.date_range]
+    original = [p.date_range for p in project.phases if p.date_range]
+    moved = [p.date_range for p in shifted.phases if p.date_range]
     assert [(r.start - offset, r.end - offset) for r in moved] == [(r.start, r.end) for r in original]
     assert shifted.phases[2].date_range is None
     assert schedule_anchor(shifted) == schedule_anchor(project) + offset
-    assert project.date_ranges == [WEEK_1, WEEK_3]  # the input is left untouched
+    assert project.phases[0].date_range == WEEK_1  # the input is left untouched
 
 
 @pytest.mark.parametrize(
@@ -104,7 +100,7 @@ def test_candidates_are_weekly_from_the_window_start(solver, window_end, expecte
 
 
 def test_project_may_end_after_the_window(solver):
-    project = _project(date_ranges=[DateRange(start=date(2026, 3, 2), end=date(2026, 6, 30))])
+    project = _project(date_range=DateRange(start=date(2026, 3, 2), end=date(2026, 6, 30)))
     window = DateRange(start=date(2026, 1, 5), end=date(2026, 1, 10))
     scan = solver.solve_pool_over_starts(project, [_person("p1")], AssignmentWeights(), window)
     assert scan.best_start == date(2026, 1, 5)
@@ -167,9 +163,9 @@ def _unreachable_from(monkeypatch, starts):
     # beyond it at the given starts reaches the diagnosis safety net there.
     staffable_steps = PuLPTeamAssignmentSolver._staffable_steps
 
-    def inflated(self, project, candidates):
-        extra = 1 if project.date_ranges[0].start in starts else 0
-        return staffable_steps(self, project, candidates) + extra
+    def inflated(self, phase, candidates):
+        extra = 1 if phase.date_range.start in starts else 0
+        return staffable_steps(self, phase, candidates) + extra
 
     monkeypatch.setattr(PuLPTeamAssignmentSolver, "_staffable_steps", inflated)
 
@@ -209,7 +205,7 @@ def test_pool_at_best_start_matches_solve_pool_on_the_shifted_project(solver):
     people[0] = _person("py5.0", python_level=5.0, vacations=[WEEK_1])
     project = _project(
         skill_requirements=[SkillRequirement(id="python", min_level=3, fte=2.0)],
-        date_ranges=[DateRange(start=date(2025, 12, 1), end=date(2025, 12, 7))],
+        date_range=DateRange(start=date(2025, 12, 1), end=date(2025, 12, 7)),
     )
     weights = AssignmentWeights()
     window = DateRange(start=WEEK_1.start, end=WEEK_2.start)
@@ -253,7 +249,7 @@ def test_plain_solve_pool_leaves_start_date_unset(solver):
 def test_undated_project_cannot_be_scanned(solver):
     with pytest.raises(ValueError, match="no date range"):
         solver.solve_pool_over_starts(
-            _project(date_ranges=[]),
+            _project(date_range=None),
             [_person("p1")],
             AssignmentWeights(),
             DateRange(start=WEEK_1.start, end=WEEK_1.end),

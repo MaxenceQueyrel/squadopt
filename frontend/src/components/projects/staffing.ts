@@ -26,12 +26,12 @@ export function projectFill(staffed: number, total: number): FillStatus {
   return staffed === 0 ? "empty" : "partial";
 }
 
-/** One staffing unit of a project: a phase, the whole (non-phased) project, or the
- * catch-all for assignments that belong to no current phase. */
+/** One staffing unit of a project: a phase, the whole project when it has a single phase,
+ * or the catch-all for assignments that belong to no current phase. */
 export interface StaffingLane {
   key: string;
   label: string;
-  phaseId: string | null; // sent as `phase_id` when assigning from this lane
+  phaseId: string | null; // sent as `phase_id` when assigning; null for the unphased lane
   requiredFte: number | null; // sum of the skill FTE; null for the unphased lane, which has no requirements
   skillRequirements: SkillRequirement[];
   dateRanges: DateRange[];
@@ -41,27 +41,14 @@ export interface StaffingLane {
 /** Splits a project's assignments into staffing lanes, phases in timeline order (undated last). */
 export function buildLanes(project: Project, assignments: Assignment[]): StaffingLane[] {
   const own = assignments.filter((a) => a.project_id === project.id);
-  if (project.phases.length === 0) {
-    return [
-      {
-        key: "whole-project",
-        label: "Whole project",
-        phaseId: null,
-        requiredFte: requiredFte(project.skill_requirements),
-        skillRequirements: project.skill_requirements,
-        dateRanges: project.date_ranges,
-        assignments: own,
-      },
-    ];
-  }
-
+  const wholeProject = project.phases.length === 1;
   const phases = [...project.phases].sort((a, b) => {
     if (!a.date_range || !b.date_range) return Number(!a.date_range) - Number(!b.date_range);
     return a.date_range.start.localeCompare(b.date_range.start);
   });
   const lanes: StaffingLane[] = phases.map((phase) => ({
-    key: `phase-${phase.id}`,
-    label: phase.id,
+    key: wholeProject ? "whole-project" : `phase-${phase.id}`,
+    label: wholeProject ? "Whole project" : phase.id,
     phaseId: phase.id,
     requiredFte: requiredFte(phase.skill_requirements),
     skillRequirements: phase.skill_requirements,
@@ -72,7 +59,7 @@ export function buildLanes(project: Project, assignments: Assignment[]): Staffin
   // Phases can be renamed or removed after people were staffed on them; those
   // assignments land here too so nothing on the project is hidden.
   const phaseIds = new Set(project.phases.map((p) => p.id));
-  const unphased = own.filter((a) => a.phase_id === null || !phaseIds.has(a.phase_id));
+  const unphased = own.filter((a) => !phaseIds.has(a.phase_id));
   if (unphased.length > 0) {
     lanes.push({
       key: "unphased",
@@ -93,7 +80,7 @@ function roundFte(fte: number): number {
 
 /** Each distinct person's FTE on the lane, in roster order: their highest ratio on it. */
 export function fteByPerson(lane: StaffingLane): Map<string, number> {
-  // A project with several date ranges holds one assignment per range for the same person.
+  // A person can hold several assignments on the same lane.
   const ratioByPerson = new Map<string, number>();
   for (const a of lane.assignments) {
     ratioByPerson.set(a.person_id, Math.max(ratioByPerson.get(a.person_id) ?? 0, a.ratio));
@@ -189,7 +176,7 @@ export function staffingBaseline(
   const byKey = new Map<string, AssignedMember>();
   for (const a of assignments) {
     if (!covered.has(a.phase_id)) continue;
-    // A project with several date ranges holds one assignment per range for the same member.
+    // A member can hold several assignments on the same phase.
     byKey.set(`${a.person_id}|${a.phase_id}`, {
       person_id: a.person_id,
       fte_allocation: a.ratio,
@@ -226,12 +213,9 @@ export const projectStatusTones: Record<ProjectStatus, PillTone> = {
   complete: "primary",
 };
 
-/** First start to last end across the project's date ranges and phase dates; null if undated. */
+/** First start to last end across the project's phase dates; null if undated. */
 export function projectSpan(project: Project): DateRange | null {
-  const ranges = [
-    ...project.date_ranges,
-    ...project.phases.flatMap((phase) => (phase.date_range ? [phase.date_range] : [])),
-  ];
+  const ranges = project.phases.flatMap((phase) => (phase.date_range ? [phase.date_range] : []));
   if (ranges.length === 0) return null;
   let { start, end } = ranges[0];
   for (const range of ranges) {

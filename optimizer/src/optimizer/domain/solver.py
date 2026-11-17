@@ -24,7 +24,7 @@ class InfeasibleAssignmentError(ValueError):
     def __init__(self, project_id: str, conflicts: list[PhaseConflict]) -> None:
         self.project_id = project_id
         self.conflicts = conflicts
-        causes = ", ".join(f"{c.reason} in phase {c.phase_id}" if c.phase_id else str(c.reason) for c in conflicts)
+        causes = ", ".join(f"{c.reason} in phase {c.phase_id}" for c in conflicts)
         super().__init__(f"Could not staff project '{project_id}': {causes or 'no feasible assignment'}.")
 
 
@@ -129,7 +129,7 @@ class AssignmentSolverPort(ABC):
         Candidates rank fully covered first, then by highest score, then earliest start.
 
         Args:
-            project: The project requirements and constraints, with at least one date range.
+            project: The project requirements and constraints, with at least one dated phase.
             people: Pool of candidate people to assign.
             weights: Relative weights for performance, chemistry, growth and cost.
             start_window: Earliest and latest allowed start dates, both inclusive.
@@ -145,7 +145,7 @@ class AssignmentSolverPort(ABC):
             ``feasible=False`` with no team.
 
         Raises:
-            ValueError: If the project has no date range to shift.
+            ValueError: If no phase of the project has a date range to shift.
             InfeasibleAssignmentError: If every candidate start is infeasible; carries the
                 conflicts of the earliest candidate.
         """

@@ -10,7 +10,7 @@ from api.models.team import Team
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
 from api.v1 import teams as teams_module
-from tests.conftest import ONE_FTE_NEED
+from tests.conftest import one_phase
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def client(tmp_path, monkeypatch):
 def _create_project(client, headers) -> str:
     response = client.post(
         "/api/v1/projects/",
-        json={"name": "Apollo", "skill_requirements": [ONE_FTE_NEED]},
+        json={"name": "Apollo", "phases": one_phase()},
         headers=headers,
     )
     assert response.status_code == 201
@@ -39,7 +39,7 @@ def test_create_team_sets_created_at(client, org_headers):
         "/api/v1/teams/",
         json={
             "project_id": project_id,
-            "members": [{"person_id": "alice", "fte_allocation": 1.0}],
+            "members": [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
             "optimization_score": 1.0,
             "optimization_max_score": 1.0,
         },

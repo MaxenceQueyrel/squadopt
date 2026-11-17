@@ -43,12 +43,17 @@ def _req(skill_id, min_level, fte=1.0, max_people=None):
     return SkillRequirement(id=skill_id, min_level=min_level, fte=fte, max_people=max_people)
 
 
+def _single(*requirements, date_range=None):
+    phase = ProjectPhase(id="main", skill_requirements=list(requirements), date_range=date_range)
+    return ProjectInput(id="proj", phases=[phase])
+
+
 def test_fully_covered_project(solver):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 3)])
+    project = _single(_req("python", 3))
     result = solver.solve(project, [_person("a", python=5)], PERF_ONLY)
     assert result.coverage == [
         PhaseCoverage(
-            phase_id=None,
+            phase_id="main",
             required_fte=1.0,
             staffed_fte=1.0,
             available_fte=1.0,
@@ -64,10 +69,7 @@ def test_fully_covered_project(solver):
 
 
 def test_partially_covered_skills(solver):
-    project = ProjectInput(
-        id="proj",
-        skill_requirements=[_req("python", 5), _req("rust", 4), _req("go", 2, fte=0.4)],
-    )
+    project = _single(_req("python", 5), _req("rust", 4), _req("go", 2, fte=0.4))
     people = [_person("a", python=5, rust=2), _person("b", python=1, rust=4.5, go=1)]
     result = solver.solve(project, people, PERF_ONLY)
 
@@ -82,7 +84,7 @@ def test_partially_covered_skills(solver):
 
 
 def test_skill_staffed_below_its_fte_is_not_met(solver):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 3, fte=2.0)], date_ranges=[SPAN])
+    project = _single(_req("python", 3, fte=2.0), date_range=SPAN)
     result = solver.solve(project, [_person("a", python=5), _person("b", availability=0.5, python=4)], PERF_ONLY)
     (skill,) = result.coverage[0].skills
     assert (skill.required_fte, skill.covered_fte, skill.met) == (2.0, 1.4, False)
@@ -134,7 +136,7 @@ def test_phase_without_candidates_is_reported_empty(solver):
 
 
 def test_empty_pool_still_reports_coverage(solver):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 1, fte=2.0)])
+    project = _single(_req("python", 1, fte=2.0))
     result = solver.solve(project, [], PERF_ONLY)
     assert result.coverage[0].staffed_fte == 0.0
     assert not result.coverage[0].skills[0].met
@@ -142,7 +144,7 @@ def test_empty_pool_still_reports_coverage(solver):
 
 
 def test_every_alternative_carries_its_own_coverage(solver):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 2)])
+    project = _single(_req("python", 2))
     people = [_person("strong", python=5), _person("weak", python=2)]
     best, alternative = solver.solve_pool(project, people, PERF_ONLY, n_alternatives=1, min_difference=1)
     assert best.coverage[0].skills[0].best_level == 5
@@ -152,7 +154,7 @@ def test_every_alternative_carries_its_own_coverage(solver):
 
 
 def test_member_skill_allocations_add_up_to_their_total(solver):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 3, fte=0.6), _req("react", 3, fte=0.4)])
+    project = _single(_req("python", 3, fte=0.6), _req("react", 3, fte=0.4))
     result = solver.solve(project, [_person("a", python=4, react=4)], PERF_ONLY)
     (member,) = result.members
     assert member.fte_allocation == 1.0
@@ -175,17 +177,17 @@ def inflated_need(monkeypatch):
     # beyond it, for the requirements of exactly 1 FTE, reaches the diagnosis safety net.
     staffable_steps = PuLPTeamAssignmentSolver._staffable_steps
 
-    def inflated(self, project, candidates):
-        extra = 1 if sum(req.fte for req in project.skill_requirements) == 1.0 else 0
-        return staffable_steps(self, project, candidates) + extra
+    def inflated(self, phase, candidates):
+        extra = 1 if sum(req.fte for req in phase.skill_requirements) == 1.0 else 0
+        return staffable_steps(self, phase, candidates) + extra
 
     monkeypatch.setattr(PuLPTeamAssignmentSolver, "_staffable_steps", inflated)
 
 
 def test_unreachable_need_is_reported(solver, inflated_need):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)])
+    project = _single(_req("python", 0))
     assert _infeasibility(solver, project, [_person("m0"), _person("m1")]) == [
-        PhaseConflict(phase_id=None, reason=InfeasibilityReason.FTE_NOT_REACHABLE, required_fte=1.0, need_fte=1.2)
+        PhaseConflict(phase_id="main", reason=InfeasibilityReason.FTE_NOT_REACHABLE, required_fte=1.0, need_fte=1.2)
     ]
 
 
@@ -200,6 +202,6 @@ def test_unreachable_need_is_attributed_to_its_phase(solver, inflated_need):
 
 
 def test_infeasibility_is_still_a_value_error_with_a_readable_message(solver, inflated_need):
-    project = ProjectInput(id="proj", skill_requirements=[_req("python", 0)])
-    with pytest.raises(ValueError, match="fte_not_reachable"):
+    project = _single(_req("python", 0))
+    with pytest.raises(ValueError, match="fte_not_reachable in phase main"):
         solver.solve_pool(project, [_person("m0"), _person("m1")], PERF_ONLY)

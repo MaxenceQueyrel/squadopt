@@ -7,7 +7,7 @@ from api.main import app
 from api.models.project import Project
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
-from tests.conftest import ONE_FTE_NEED, create_org
+from tests.conftest import ONE_FTE_NEED, create_org, one_phase
 
 
 @pytest.fixture
@@ -22,18 +22,19 @@ def _create_project(client, headers, **overrides):
         "name": "Atlas Migration",
         "description": "Migrate legacy billing to Atlas",
         "priority": "high",
-        "skill_requirements": [
-            {
-                "id": "python",
-                "description": "Python",
-                "min_level": 3.0,
-                "fte": 1.6,
-                "max_people": 3,
-            },
-            {"id": "sql", "description": "SQL", "min_level": 2.5, "fte": 1.0},
-        ],
-        "date_ranges": [{"start": "2026-07-01", "end": "2026-09-30"}],
-        "phases": [],
+        "phases": one_phase(
+            [
+                {
+                    "id": "python",
+                    "description": "Python",
+                    "min_level": 3.0,
+                    "fte": 1.6,
+                    "max_people": 3,
+                },
+                {"id": "sql", "description": "SQL", "min_level": 2.5, "fte": 1.0},
+            ],
+            {"start": "2026-07-01", "end": "2026-09-30"},
+        ),
         **overrides,
     }
     response = client.post("/api/v1/projects/", json=payload, headers=headers)
@@ -55,23 +56,20 @@ _CSV_FIELDNAMES = (
     "description",
     "priority",
     "completed_at",
-    "skill_requirements",
-    "date_ranges",
     "phases",
     "start_window",
 )
+_LEGACY_CSV_FIELDNAMES = (*_CSV_FIELDNAMES, "skill_requirements", "date_ranges")
 
 
-def _row_values(**overrides):
+def _row_values(fieldnames=_CSV_FIELDNAMES, **overrides):
     row = {
         "id": "proj-1",
         "name": "Nova Redesign",
         "description": "",
         "priority": "medium",
         "completed_at": "",
-        "skill_requirements": json.dumps([ONE_FTE_NEED]),
-        "date_ranges": "[]",
-        "phases": "[]",
+        "phases": json.dumps(one_phase()),
         "start_window": "",
         **overrides,
     }
@@ -81,7 +79,7 @@ def _row_values(**overrides):
             return '"{}"'.format(value.replace('"', '""'))
         return value
 
-    return ",".join(_cell(row[field]) for field in _CSV_FIELDNAMES)
+    return ",".join(_cell(row[field]) for field in fieldnames)
 
 
 def _csv_row(**overrides):
@@ -103,8 +101,14 @@ def test_import_creates_new_projects(client, org_headers):
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert project["name"] == "Nova Redesign"
     assert "n_slots" not in project
-    assert project["skill_requirements"] == [
-        {**ONE_FTE_NEED, "description": "", "max_people": 1}
+    assert project["phases"] == [
+        {
+            "id": "main",
+            "skill_requirements": [
+                {**ONE_FTE_NEED, "description": "", "max_people": 1}
+            ],
+            "date_range": None,
+        }
     ]
     assert project["priority"] == "medium"
 
@@ -135,7 +139,7 @@ def test_import_rejects_missing_column(client, org_headers):
 
 
 def test_import_rejects_malformed_json_cell(client, org_headers):
-    csv_text = _csv_row(skill_requirements="not-json")
+    csv_text = _csv_row(phases="not-json")
 
     response = _upload_csv(client, org_headers, csv_text)
 
@@ -153,7 +157,7 @@ def test_import_rejects_malformed_json_cell(client, org_headers):
     ids=["no-skill", "off-grid-fte", "max-people-out-of-range"],
 )
 def test_import_rejects_invalid_field_value(client, org_headers, skill_requirements):
-    csv_text = _csv_row(skill_requirements=json.dumps(skill_requirements))
+    csv_text = _csv_row(phases=json.dumps(one_phase(skill_requirements)))
 
     response = _upload_csv(client, org_headers, csv_text)
 
@@ -170,7 +174,7 @@ def test_import_rejects_an_unknown_priority(client, org_headers):
 
 
 def test_import_fails_closed_on_partial_bad_row(client, org_headers):
-    csv_text = _csv_rows({"id": "good"}, {"id": "bad", "skill_requirements": "[]"})
+    csv_text = _csv_rows({"id": "good"}, {"id": "bad", "phases": "[]"})
 
     response = _upload_csv(client, org_headers, csv_text)
 
@@ -181,14 +185,16 @@ def test_import_fails_closed_on_partial_bad_row(client, org_headers):
 def test_import_does_not_validate_skill_ids(client, org_headers):
     """Unlike People import, referenced skill ids are stored as-is."""
     csv_text = _csv_row(
-        skill_requirements='[{"id": "ghost-skill", "min_level": 2.0, "fte": 1.0}]',
+        phases=json.dumps(
+            one_phase([{"id": "ghost-skill", "min_level": 2.0, "fte": 1.0}])
+        ),
     )
 
     response = _upload_csv(client, org_headers, csv_text)
 
     assert response.status_code == 200
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
-    assert project["skill_requirements"][0]["id"] == "ghost-skill"
+    assert project["phases"][0]["skill_requirements"][0]["id"] == "ghost-skill"
 
 
 def test_export_round_trips_through_import(client, org_headers):
@@ -197,7 +203,6 @@ def test_export_round_trips_through_import(client, org_headers):
         client,
         org_headers,
         name="Nova Redesign",
-        skill_requirements=[],
         phases=[
             {
                 "id": "design",
@@ -229,8 +234,7 @@ def test_export_round_trips_through_import(client, org_headers):
         f"/api/v1/projects/{atlas['id']}", headers=other_org_headers
     ).json()
     assert imported_atlas["name"] == "Atlas Migration"
-    assert imported_atlas["date_ranges"] == atlas["date_ranges"]
-    assert imported_atlas["skill_requirements"] == atlas["skill_requirements"]
+    assert imported_atlas["phases"] == atlas["phases"]
     imported_nova = client.get(
         f"/api/v1/projects/{nova['id']}", headers=other_org_headers
     ).json()
@@ -268,7 +272,13 @@ def test_import_treats_empty_completed_at_as_open(client, org_headers):
 
 def test_import_accepts_legacy_csv_without_completed_at_column(client, org_headers):
     legacy_fieldnames = [
-        f for f in _CSV_FIELDNAMES if f not in ("completed_at", "start_window")
+        "id",
+        "name",
+        "description",
+        "priority",
+        "skill_requirements",
+        "date_ranges",
+        "phases",
     ]
     skills_cell = '"[{""id"": ""general"", ""min_level"": 0, ""fte"": 1}]"'
     csv_text = (
@@ -282,6 +292,48 @@ def test_import_accepts_legacy_csv_without_completed_at_column(client, org_heade
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert project["completed_at"] is None
     assert project["start_window"] is None
+    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [("main", None)]
+
+
+def test_import_turns_legacy_columns_into_one_phase_per_date_range(client, org_headers):
+    january = {"start": "2026-01-05", "end": "2026-01-30"}
+    march = {"start": "2026-03-02", "end": "2026-03-27"}
+    row = _row_values(
+        _LEGACY_CSV_FIELDNAMES,
+        phases="[]",
+        skill_requirements=json.dumps([ONE_FTE_NEED]),
+        date_ranges=json.dumps([january, march]),
+    )
+    csv_text = f"{','.join(_LEGACY_CSV_FIELDNAMES)}\n{row}\n"
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
+    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [
+        ("main", january),
+        ("main-2", march),
+    ]
+    assert all(p["skill_requirements"][0]["id"] == "general" for p in project["phases"])
+    assert "skill_requirements" not in project
+    assert "date_ranges" not in project
+
+
+def test_import_keeps_phases_over_legacy_columns(client, org_headers):
+    phases = [{"id": "build", "skill_requirements": [ONE_FTE_NEED]}]
+    row = _row_values(
+        _LEGACY_CSV_FIELDNAMES,
+        phases=json.dumps(phases),
+        skill_requirements="[]",
+        date_ranges=json.dumps([{"start": "2026-01-05", "end": "2026-01-30"}]),
+    )
+    csv_text = f"{','.join(_LEGACY_CSV_FIELDNAMES)}\n{row}\n"
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
+    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [("build", None)]
 
 
 def test_import_rejects_invalid_completed_at(client, org_headers):

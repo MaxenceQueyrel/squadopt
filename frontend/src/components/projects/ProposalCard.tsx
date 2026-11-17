@@ -7,11 +7,10 @@ import { CoverageBreakdown } from "@/components/projects/CoverageBreakdown";
 import { errorMessage } from "@/services/api";
 import type { AssignedMember, Person, PhaseCoverage } from "@/types";
 
-function replacedScope(members: AssignedMember[]): string {
+function replacedScope(members: AssignedMember[], phased: boolean): string {
   const phaseIds = [...new Set(members.map((m) => m.phase_id))];
-  if (phaseIds.length === 1 && phaseIds[0] === null) return "the whole project";
-  const names = phaseIds.map((id) => id ?? "unphased");
-  return `${names.length === 1 ? "phase" : "phases"} ${names.join(", ")}`;
+  if (!phased) return "the whole project";
+  return `${phaseIds.length === 1 ? "phase" : "phases"} ${phaseIds.join(", ")}`;
 }
 
 // Candidate starts step weekly from the window's start, which need not be a whole number
@@ -36,6 +35,7 @@ export function ProposalCard({
   fullyCovered,
   people,
   baseline,
+  phased,
   startDate,
   plannedStart,
   onApply,
@@ -51,6 +51,7 @@ export function ProposalCard({
   fullyCovered: boolean | null;
   people: Person[];
   baseline: AssignedMember[];
+  phased: boolean;
   startDate: string | null;
   plannedStart: string | null;
   onApply: () => Promise<void>;
@@ -133,13 +134,13 @@ export function ProposalCard({
             <strong>Starts {shift}</strong>
           </p>
         )}
-        <CoverageBreakdown coverage={coverage} fullyCovered={fullyCovered} />
+        <CoverageBreakdown coverage={coverage} fullyCovered={fullyCovered} phased={phased} />
         {members.length === 0 ? (
           <p style={{ color: colors.muted, margin: 0 }}>
             No feasible assignment found for these constraints.
           </p>
         ) : (
-          <TeamMembers members={members} people={people} baseline={baseline} />
+          <TeamMembers members={members} people={people} baseline={baseline} phased={phased} />
         )}
       </Card>
 
@@ -157,7 +158,7 @@ export function ProposalCard({
           }
         >
           <p style={{ marginTop: 0 }}>
-            This replaces current staffing for {replacedScope(members)}.
+            This replaces current staffing for {replacedScope(members, phased)}.
           </p>
           {shift && (
             <p style={{ color: colors.warningText }}>
