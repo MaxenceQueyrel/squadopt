@@ -47,8 +47,9 @@ export async function addSkillRequirement(
   page: Page,
   { id, minLevel = 0, fte = 1 }: { id: string; minLevel?: number; fte?: number },
 ): Promise<void> {
-  // With no rows yet the button is the form field's first control, so it takes the field's label.
-  await page.getByRole("button").filter({ hasText: "+ Add requirement" }).click();
+  // With no rows yet the button is the form field's first control, so it takes the field's
+  // label. A phased project has one such button per phase; the row goes to the last one.
+  await page.getByRole("button").filter({ hasText: "+ Add requirement" }).last().click();
   await page.getByPlaceholder("skill id").last().fill(id);
   // Clicking outside the skill combobox closes its suggestion list.
   const level = page.getByLabel("Minimum level", { exact: true }).last();

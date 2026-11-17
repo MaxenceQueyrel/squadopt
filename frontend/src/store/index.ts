@@ -239,9 +239,6 @@ export function knownSkillIds(state: AppState): string[] {
     });
   });
   state.projects.forEach((pr) => {
-    pr.skill_requirements.forEach((s) => {
-      ids.add(s.id);
-    });
     pr.phases.forEach((ph) => {
       ph.skill_requirements.forEach((s) => {
         ids.add(s.id);

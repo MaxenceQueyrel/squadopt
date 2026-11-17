@@ -32,6 +32,7 @@ export function ProposalsCard({
   people,
   assignments,
   totalFte,
+  phased,
   today,
   reviewingId,
   onReview,
@@ -40,6 +41,7 @@ export function ProposalsCard({
   people: Person[];
   assignments: Assignment[];
   totalFte: number;
+  phased: boolean;
   today: string;
   reviewingId: string | null;
   onReview: (teamId: string | null) => void;
@@ -144,6 +146,7 @@ export function ProposalsCard({
           people={people}
           assignments={assignments}
           totalFte={totalFte}
+          phased={phased}
           onClose={() => setComparing(false)}
         />
       )}
@@ -156,16 +159,17 @@ function CompareProposalsModal({
   people,
   assignments,
   totalFte,
+  phased,
   onClose,
 }: {
   proposals: Team[];
   people: Person[];
   assignments: Assignment[];
   totalFte: number;
+  phased: boolean;
   onClose: () => void;
 }) {
   const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? id;
-  const phased = proposals.some((team) => team.members.some((m) => m.phase_id !== null));
   const memberLabel = (m: AssignedMember) =>
     phased ? `${m.phase_id ?? "unphased"}: ${nameOf(m.person_id)}` : nameOf(m.person_id);
   const current = staffingBaseline(

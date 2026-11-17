@@ -33,7 +33,7 @@ function monthTicks(firstDay: number, lastDay: number): { day: number; label: st
  * project's first and last dates, its duration and its phase count. */
 export function PhaseTimeline({ lanes, today }: { lanes: StaffingLane[]; today: string }) {
   const staffable = lanes.filter((lane) => lane.requiredFte !== null);
-  const phased = staffable.some((lane) => lane.phaseId !== null);
+  const phased = staffable.length > 1;
   const dated = staffable.filter((lane) => lane.dateRanges.length > 0);
   const undated = staffable.filter((lane) => lane.dateRanges.length === 0);
   const ranges = dated.flatMap((lane) => lane.dateRanges);

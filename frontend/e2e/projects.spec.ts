@@ -66,6 +66,60 @@ test("the project form sums per-skill FTE and keeps max people in range", async 
   await expect(lane).toContainText("react ≥ 2 · 0.8 FTE");
 });
 
+test("adding a phase to a one-shot project keeps its criteria in the first phase", async ({
+  page,
+}) => {
+  const name = `Two Stages ${uniqueSuffix()}`;
+
+  await page.goto("/projects");
+  await page.getByRole("button", { name: "New project" }).click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await expect(page.getByLabel("Phase id", { exact: true })).toHaveCount(0);
+  await addSkillRequirement(page, { id: "python", minLevel: 3, fte: 2 });
+  // Like "+ Add requirement", these buttons take their form field's label.
+  await page.getByRole("button").filter({ hasText: "+ Add date range" }).click();
+  await page.getByLabel("Start", { exact: true }).fill("2027-01-01");
+  await page.getByLabel("End", { exact: true }).fill("2027-01-31");
+
+  await page.getByRole("button").filter({ hasText: "+ Add phase" }).click();
+  const phaseIds = page.getByLabel("Phase id", { exact: true });
+  await expect(phaseIds).toHaveCount(2);
+  await expect(page.getByPlaceholder("skill id")).toHaveCount(1);
+  await expect(page.getByPlaceholder("skill id")).toHaveValue("python");
+  await expect(page.getByLabel("Minimum level", { exact: true })).toHaveValue("3");
+  await expect(page.getByLabel("FTE", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("Start", { exact: true })).toHaveValue("2027-01-01");
+  await expect(page.getByLabel("End", { exact: true })).toHaveValue("2027-01-31");
+
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "Add at least one skill requirement to every phase.",
+  );
+  await addSkillRequirement(page, { id: "general" });
+  await page.getByRole("button").filter({ hasText: "+ Add date range" }).click();
+  await page.getByLabel("Start", { exact: true }).last().fill("2027-02-01");
+  await page.getByLabel("End", { exact: true }).last().fill("2027-02-28");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Give every phase an id.");
+  await phaseIds.first().fill("design");
+  await phaseIds.last().fill("design");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("alert")).toHaveText("Give every phase a different id.");
+  await phaseIds.last().fill("build");
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect(projectRow(page, name)).toContainText("0 / 3");
+  await page.getByRole("link", { name }).click();
+  const design = page.getByRole("region", { name: "design" });
+  await expect(design).toContainText("0 of 2 FTE");
+  await expect(design).toContainText("python ≥ 3 · 2 FTE");
+  await expect(page.getByTitle("design: 2027-01-01 → 2027-01-31")).toBeVisible();
+  const build = page.getByRole("region", { name: "build" });
+  await expect(build).toContainText("0 of 1 FTE");
+  await expect(build).toContainText("general ≥ 0 · 1 FTE");
+  await expect(page.getByTitle("build: 2027-02-01 → 2027-02-28")).toBeVisible();
+});
+
 test("assigning a person from the project workspace shows the roster entry", async ({ page }) => {
   const suffix = uniqueSuffix();
   const projectName = `Platform Rewrite ${suffix}`;
@@ -572,9 +626,13 @@ test("a project requesting no FTE stays last on the staffing sort", async ({ pag
       name: `Hotel ${suffix}`,
       description: "",
       priority: "critical",
-      skill_requirements: [],
-      phases: [],
-      date_ranges: [{ start: "2026-12-01", end: "2026-12-31" }],
+      phases: [
+        {
+          id: "main",
+          skill_requirements: [],
+          date_range: { start: "2026-12-01", end: "2026-12-31" },
+        },
+      ],
       completed_at: null,
       start_window: null,
     });

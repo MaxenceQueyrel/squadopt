@@ -35,8 +35,8 @@ function SkillRow({ skill }: { skill: SkillCoverage }) {
   );
 }
 
-function PhaseTable({ phase }: { phase: PhaseCoverage }) {
-  const label = phase.phase_id === null ? "Whole project" : `Phase ${phase.phase_id}`;
+function PhaseTable({ phase, phased }: { phase: PhaseCoverage; phased: boolean }) {
+  const label = !phased || phase.phase_id === null ? "Whole project" : `Phase ${phase.phase_id}`;
   return (
     <table
       aria-label={`Coverage of ${label}`}
@@ -78,13 +78,16 @@ function PhaseTable({ phase }: { phase: PhaseCoverage }) {
   );
 }
 
-/** Per-phase FTE and per-skill coverage of a proposal, expanded when something is unmet. */
+/** Per-phase FTE and per-skill coverage of a proposal, expanded when something is unmet.
+ * A project that is not `phased` (a single phase) is labelled as the whole project. */
 export function CoverageBreakdown({
   coverage,
   fullyCovered,
+  phased,
 }: {
   coverage: PhaseCoverage[];
   fullyCovered: boolean | null;
+  phased: boolean;
 }) {
   // Teams saved before coverage was tracked carry none; there is nothing to show for them.
   if (coverage.length === 0) return null;
@@ -106,7 +109,7 @@ export function CoverageBreakdown({
         <span style={{ color: colors.muted }}>Requirement coverage</span>
       </summary>
       {coverage.map((phase) => (
-        <PhaseTable key={phase.phase_id ?? "whole-project"} phase={phase} />
+        <PhaseTable key={phase.phase_id ?? "whole-project"} phase={phase} phased={phased} />
       ))}
     </details>
   );

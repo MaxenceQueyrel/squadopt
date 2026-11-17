@@ -161,6 +161,9 @@ export default function PersonDetailPage() {
 
   const projectName = (projectId: string) =>
     projects.find((p) => p.id === projectId)?.name ?? projectId;
+  // A single-phase project is staffed as a whole, so its phase id is not worth showing.
+  const phaseOf = (a: Assignment) =>
+    (projects.find((p) => p.id === a.project_id)?.phases.length ?? 0) > 1 ? a.phase_id : null;
   const activeProjects = new Set(current.filter((a) => a.start <= today).map((a) => a.project_id));
   const lastProject = [...past].sort((a, b) => b.end.localeCompare(a.end))[0];
   const closeDialog = () => setDialog(null);
@@ -285,7 +288,12 @@ export default function PersonDetailPage() {
                   </div>
                 </div>
               ) : (
-                <AssignmentList assignments={current} projectName={projectName} today={today} />
+                <AssignmentList
+                  assignments={current}
+                  projectName={projectName}
+                  phaseOf={phaseOf}
+                  today={today}
+                />
               )}
             </SectionCard>
           }
@@ -337,7 +345,12 @@ export default function PersonDetailPage() {
               No past assignments yet.
             </p>
           ) : (
-            <AssignmentList assignments={past} projectName={projectName} today={today} />
+            <AssignmentList
+              assignments={past}
+              projectName={projectName}
+              phaseOf={phaseOf}
+              today={today}
+            />
           )}
         </SectionCard>
       </TabPanel>
@@ -435,10 +448,12 @@ function SectionCard({
 function AssignmentList({
   assignments,
   projectName,
+  phaseOf,
   today,
 }: {
   assignments: Assignment[];
   projectName: (projectId: string) => string;
+  phaseOf: (assignment: Assignment) => string | null;
   today: string;
 }) {
   return (
@@ -459,8 +474,8 @@ function AssignmentList({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>
                 {projectName(a.project_id)}
-                {a.phase_id && (
-                  <span style={{ fontWeight: 400, color: colors.muted }}> · {a.phase_id}</span>
+                {phaseOf(a) && (
+                  <span style={{ fontWeight: 400, color: colors.muted }}> · {phaseOf(a)}</span>
                 )}
               </div>
               <div

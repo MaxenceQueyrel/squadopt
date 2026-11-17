@@ -124,9 +124,9 @@ export function OptimizationPanel({
         </button>
       </div>
       <p style={{ fontSize: "0.82rem", color: colors.muted, margin: "0.4rem 0 1rem" }}>
-        {project.phases.length
-          ? `${project.phases.length} phase(s)`
-          : `${requiredFte(project.skill_requirements)} FTE needed`}
+        {project.phases.length > 1
+          ? `${project.phases.length} phases`
+          : `${requiredFte(project.phases[0].skill_requirements)} FTE needed`}
       </p>
 
       <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.25rem" }}>Objective weights</h3>
@@ -159,7 +159,7 @@ export function OptimizationPanel({
           {error}
         </p>
       )}
-      {infeasible && <InfeasibilityReport detail={infeasible} />}
+      {infeasible && <InfeasibilityReport detail={infeasible} phased={project.phases.length > 1} />}
     </aside>
   );
 }

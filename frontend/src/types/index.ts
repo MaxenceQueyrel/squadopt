@@ -78,9 +78,7 @@ export interface Project {
   id: string;
   name: string;
   description: string;
-  skill_requirements: SkillRequirement[];
-  date_ranges: DateRange[];
-  phases: ProjectPhase[];
+  phases: ProjectPhase[]; // at least one; a single phase is staffed as the whole project
   // Earliest and latest allowed start; the optimizer shifts the whole schedule within it.
   start_window: DateRange | null;
   priority: Priority;
@@ -94,7 +92,7 @@ export interface Assignment {
   ratio: number;
   start: string;
   end: string;
-  phase_id: string | null;
+  phase_id: string;
 }
 
 export interface SkillAllocation {
@@ -161,7 +159,8 @@ export interface SkillCoverage {
   met: boolean;
 }
 
-// One per phase in project.phases order; a project without phases has a single entry with phase_id null.
+// One per phase in project.phases order; phase_id is null only on teams saved before every
+// project had phases.
 export interface PhaseCoverage {
   phase_id: string | null;
   required_fte: number;

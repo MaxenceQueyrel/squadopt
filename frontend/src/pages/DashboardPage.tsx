@@ -128,10 +128,7 @@ function seniorityBreakdown(people: Person[]): string {
 }
 
 function requiredSkills(project: Project): string[] {
-  return [
-    ...project.skill_requirements.map((req) => req.id),
-    ...project.phases.flatMap((phase) => phase.skill_requirements.map((req) => req.id)),
-  ];
+  return project.phases.flatMap((phase) => phase.skill_requirements.map((req) => req.id));
 }
 
 function attentionItems(

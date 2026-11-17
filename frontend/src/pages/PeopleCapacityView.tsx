@@ -143,21 +143,15 @@ export default function PeopleCapacityView() {
 
   const overlays: TimelineOverlay[] = useMemo(() => {
     if (!selectedProject) return [];
-    const dateRangeOverlays = selectedProject.date_ranges.map((range, i) => ({
-      key: `range-${i}`,
-      label: selectedProject.name,
-      start: range.start,
-      end: range.end,
-    }));
-    const phaseOverlays = selectedProject.phases
+    const phased = selectedProject.phases.length > 1;
+    return selectedProject.phases
       .filter((phase) => phase.date_range)
       .map((phase) => ({
         key: `phase-${phase.id}`,
-        label: `${selectedProject.name} · ${phase.id}`,
+        label: phased ? `${selectedProject.name} · ${phase.id}` : selectedProject.name,
         start: phase.date_range!.start,
         end: phase.date_range!.end,
       }));
-    return [...dateRangeOverlays, ...phaseOverlays];
   }, [selectedProject]);
 
   // Rows only hold people that pass the filters, so a filtered-out person closes the panel.
