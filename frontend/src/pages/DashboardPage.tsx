@@ -400,7 +400,6 @@ export default function DashboardPage() {
       {creating === "project" && (
         <ProjectForm
           project={null}
-          people={people}
           skillOptions={skills}
           onClose={() => setCreating(null)}
           onSave={async (draft) => {

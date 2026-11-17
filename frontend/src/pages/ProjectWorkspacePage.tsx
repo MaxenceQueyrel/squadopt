@@ -551,7 +551,6 @@ export default function ProjectWorkspacePage() {
       {editing && (
         <ProjectForm
           project={project}
-          people={people}
           skillOptions={skillOptions}
           onClose={() => setEditing(false)}
           onSave={async (draft) => {

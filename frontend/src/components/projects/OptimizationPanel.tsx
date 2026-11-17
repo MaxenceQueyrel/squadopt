@@ -61,8 +61,7 @@ export function OptimizationPanel({
   onResult: (result: OptimizationResponse) => void;
   onClose: () => void;
 }) {
-  const { optimizationWeights, people, projects } = useAppStore();
-  const [respectExclusions, setRespectExclusions] = useState(true);
+  const { optimizationWeights } = useAppStore();
   const [nAlternatives, setNAlternatives] = useState(2);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +76,6 @@ export function OptimizationPanel({
         await optimizationApi.solve({
           project_id: project.id,
           weights: optimizationWeights,
-          respect_exclusions: respectExclusions,
           n_alternatives: nAlternatives,
         }),
       );
@@ -129,8 +127,6 @@ export function OptimizationPanel({
         {project.phases.length
           ? `${project.phases.length} phase(s)`
           : `${requiredFte(project.skill_requirements)} FTE needed`}
-        {project.included_person_ids.length > 0 &&
-          ` · ${project.included_person_ids.length} forced member(s)`}
       </p>
 
       <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.25rem" }}>Objective weights</h3>
@@ -138,23 +134,6 @@ export function OptimizationPanel({
         Define what "best team" means for this project.
       </p>
       <WeightSliders />
-
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          fontSize: "0.875rem",
-          margin: "0.5rem 0 1rem",
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={respectExclusions}
-          onChange={(e) => setRespectExclusions(e.target.checked)}
-        />
-        Respect excluded people
-      </label>
 
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
         <Button variant="primary" onClick={solve} disabled={loading}>
@@ -180,14 +159,7 @@ export function OptimizationPanel({
           {error}
         </p>
       )}
-      {infeasible && (
-        <InfeasibilityReport
-          detail={infeasible}
-          project={project}
-          people={people}
-          projects={projects}
-        />
-      )}
+      {infeasible && <InfeasibilityReport detail={infeasible} />}
     </aside>
   );
 }

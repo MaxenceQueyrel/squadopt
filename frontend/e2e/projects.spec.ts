@@ -8,8 +8,7 @@ import {
   uniqueSuffix,
 } from "./helpers";
 
-const PROJECT_CSV_HEADER =
-  "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,date_ranges,phases";
+const PROJECT_CSV_HEADER = "id,name,description,priority,skill_requirements,date_ranges,phases";
 
 const PEOPLE_CSV_HEADER =
   "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
@@ -131,10 +130,9 @@ test("assigning to a phase uses the phase dates and updates its fill", async ({ 
       date_range: { start: "2026-01-15", end: "2026-02-28" },
     },
   ];
-  const csv = [
-    PROJECT_CSV_HEADER,
-    `${projectId},${projectName},,high,[],[],[],[],${quote(phases)}`,
-  ].join("\n");
+  const csv = [PROJECT_CSV_HEADER, `${projectId},${projectName},,high,[],[],${quote(phases)}`].join(
+    "\n",
+  );
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({
     name: "projects.csv",
@@ -183,7 +181,7 @@ test("three people at 40% leave a 3-FTE project incomplete", async ({ page }) =>
   const requirements = [{ id: "general", min_level: 0, fte: 3 }];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${projectId},${projectName},,high,${quote(requirements)},[],[],[],[]`,
+    `${projectId},${projectName},,high,${quote(requirements)},[],[]`,
   ].join("\n");
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({
@@ -282,7 +280,7 @@ test("the person picker flags skill and availability fit but lets anyone be assi
   ];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${projectId},${projectName},,high,${quote(requirements)},[],[],${quote([march])},[]`,
+    `${projectId},${projectName},,high,${quote(requirements)},${quote([march])},[]`,
   ].join("\n");
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({
@@ -372,7 +370,7 @@ test("importing a CSV adds new projects and reports the result", async ({ page }
   const requirements = [{ id: "python", min_level: 3, fte: 2, max_people: 3 }];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${projectId},${name},Imported from CSV,high,${quote(requirements)},[],[],[],[]`,
+    `${projectId},${name},Imported from CSV,high,${quote(requirements)},[],[]`,
   ].join("\n");
 
   await page.locator('input[type="file"]').setInputFiles({
@@ -412,7 +410,7 @@ async function seedSortableProjects(page: Page, { staff }: { staff: boolean }): 
     PROJECT_CSV_HEADER,
     ...projects.map(
       ([id, name, priority, requirements, dateRanges]) =>
-        `${id}-${suffix},${name} ${suffix},,${priority},${requirements},[],[],${dateRanges},[]`,
+        `${id}-${suffix},${name} ${suffix},,${priority},${requirements},${dateRanges},[]`,
     ),
   ].join("\n");
   await page.goto("/projects");
