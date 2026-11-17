@@ -1,6 +1,8 @@
 from datetime import date
 
 import pytest
+from pydantic import ValidationError
+
 from optimizer.adapters.pulp_solver import PuLPTeamAssignmentSolver
 from optimizer.models import (
     AssignmentWeights,
@@ -22,6 +24,11 @@ def _python(fte=1.0, min_level=3, max_people=None):
     return SkillRequirement(id="python", min_level=min_level, fte=fte, max_people=max_people)
 
 
+def _single(*requirements, date_range=None):
+    phase = ProjectPhase(id="main", skill_requirements=list(requirements), date_range=date_range)
+    return ProjectInput(id="proj-test", phases=[phase])
+
+
 @pytest.fixture
 def solver():
     return PuLPTeamAssignmentSolver()
@@ -29,7 +36,7 @@ def solver():
 
 @pytest.fixture
 def project():
-    return ProjectInput(id="proj-test", skill_requirements=[_python()])
+    return _single(_python())
 
 
 @pytest.fixture
@@ -52,8 +59,13 @@ def people():
     ]
 
 
-def _allocations(result, phase_id=None):
+def _allocations(result, phase_id="main"):
     return {m.person_id: m.fte_allocation for m in result.members if m.phase_id == phase_id}
+
+
+def test_project_without_phases_is_rejected():
+    with pytest.raises(ValidationError, match="phases"):
+        ProjectInput(id="proj-test", phases=[])
 
 
 def test_returns_result(solver, project, people):
@@ -78,7 +90,7 @@ def test_max_score_reflects_need_and_weights(solver, project, people):
 
 
 def test_max_score_accounts_for_chemistry(solver, project, people):
-    project.skill_requirements = [_python(fte=2.0)]
+    project.phases[0].skill_requirements = [_python(fte=2.0)]
     weights = AssignmentWeights(performance=0.0, chemistry=1.0, growth=0.0, cost=0.0)
     result = solver.solve(project, people, weights)
     # 2 FTE need → at most 1 FTE shared, chemistry weight 1.0 × max affinity 5.0 = 5.0
@@ -109,7 +121,7 @@ def test_preference_weight_prefers_stated_preference(solver, project, people):
 
 def test_growth_and_preference_count_only_on_the_skill_they_name(solver, people):
     # p2 wants to grow in python but can only be placed on react here, so growth earns nothing.
-    project = ProjectInput(id="proj-test", skill_requirements=[SkillRequirement(id="react", min_level=3, fte=1.0)])
+    project = _single(SkillRequirement(id="react", min_level=3, fte=1.0))
     weights = AssignmentWeights(performance=0.0, chemistry=0.0, growth=1.0, cost=0.0)
     result = solver.solve(project, people, weights)
     assert _allocations(result) == {"p2": 1.0}
@@ -117,14 +129,14 @@ def test_growth_and_preference_count_only_on_the_skill_they_name(solver, people)
 
 
 def test_chemistry_bonus_applied(solver, project, people):
-    project.skill_requirements = [_python(fte=2.0)]
+    project.phases[0].skill_requirements = [_python(fte=2.0)]
     weights = AssignmentWeights(performance=0.0, chemistry=1.0, growth=0.0, cost=0.0)
     result = solver.solve(project, people, weights)
     assert result.score > 0  # p1↔p2 affinity is +4
 
 
 def test_unavailable_window_excludes_person(solver, project, people):
-    project.date_ranges = [SPAN]
+    project.phases[0].date_range = SPAN
     people[0].availability_windows = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.0)]
     # Performance alone would pick p1.
     result = solver.solve(project, people, PERF_ONLY)
@@ -132,8 +144,8 @@ def test_unavailable_window_excludes_person(solver, project, people):
 
 
 def test_fte_allocation_reflects_windowed_availability(solver, project, people):
-    project.date_ranges = [SPAN]
-    project.skill_requirements = [_python(max_people=2)]
+    project.phases[0].date_range = SPAN
+    project.phases[0].skill_requirements = [_python(max_people=2)]
     people[0].availability_windows = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.4)]
     # p1 is the better fit, so it gets all it can give; p2 covers the remainder.
     result = solver.solve(project, people, PERF_ONLY)
@@ -141,7 +153,7 @@ def test_fte_allocation_reflects_windowed_availability(solver, project, people):
 
 
 def test_vacation_excludes_person(solver, project, people):
-    project.date_ranges = [SPAN]
+    project.phases[0].date_range = SPAN
     people[0].vacations = [DateRange(start=date(2026, 1, 1), end=date(2026, 1, 31))]
     # Performance alone would pick p1.
     result = solver.solve(project, people, PERF_ONLY)
@@ -149,14 +161,14 @@ def test_vacation_excludes_person(solver, project, people):
 
 
 def test_fte_allocation_reflects_working_pattern(solver, project, people):
-    project.skill_requirements = [_python(max_people=2)]
+    project.phases[0].skill_requirements = [_python(max_people=2)]
     people[0].working_days_per_week = 3
     result = solver.solve(project, people, PERF_ONLY)
     assert _allocations(result) == pytest.approx({"p1": 0.6, "p2": 0.4})
 
 
 def test_fully_assigned_person_is_not_selected(solver, project, people):
-    project.date_ranges = [SPAN]
+    project.phases[0].date_range = SPAN
     people[0].assignments = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=1.0)]
     # Performance alone would pick p1.
     result = solver.solve(project, people, PERF_ONLY)
@@ -164,8 +176,8 @@ def test_fully_assigned_person_is_not_selected(solver, project, people):
 
 
 def test_availability_left_by_assignments_is_floored_to_the_grid(solver, project, people):
-    project.date_ranges = [SPAN]
-    project.skill_requirements = [_python(max_people=2)]
+    project.phases[0].date_range = SPAN
+    project.phases[0].skill_requirements = [_python(max_people=2)]
     people[0].assignments = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 31), ratio=0.5)]
     result = solver.solve(project, people, PERF_ONLY)
     assert _allocations(result) == pytest.approx({"p1": 0.4, "p2": 0.6})
@@ -181,8 +193,8 @@ def test_phases_produce_tagged_members_and_summed_score(solver, people):
     assert _allocations(result, "stage-1") == {"p1": 1.0}  # only p1 reaches python level 4
     assert _allocations(result, "stage-2") == {"p2": 1.0}  # only p2 has react
 
-    standalone_phase1 = ProjectInput(id="proj-test", skill_requirements=phase1.skill_requirements)
-    standalone_phase2 = ProjectInput(id="proj-test", skill_requirements=phase2.skill_requirements)
+    standalone_phase1 = ProjectInput(id="proj-test", phases=[phase1])
+    standalone_phase2 = ProjectInput(id="proj-test", phases=[phase2])
     expected_score = (
         solver.solve(standalone_phase1, people, PERF_ONLY).score
         + solver.solve(standalone_phase2, people, PERF_ONLY).score
@@ -260,7 +272,7 @@ def pythonistas():
 
 @pytest.fixture
 def python_project():
-    return ProjectInput(id="proj-test", skill_requirements=[_python(fte=2.0, min_level=1)], date_ranges=[SPAN])
+    return _single(_python(fte=2.0, min_level=1), date_range=SPAN)
 
 
 def _team(result):
@@ -291,8 +303,8 @@ def test_pool_truncates_when_candidates_run_out(solver, python_project, pythonis
     assert len({frozenset(_team(r)) for r in pool}) == 3
 
 
-def test_pool_min_difference_is_clamped_to_team_size(solver, python_project, pythonistas):
-    project = python_project.model_copy(update={"skill_requirements": [_python(min_level=1)]})
+def test_pool_min_difference_is_clamped_to_team_size(solver, pythonistas):
+    project = _single(_python(min_level=1), date_range=SPAN)
     pool = solver.solve_pool(project, pythonistas[:3], AssignmentWeights(), n_alternatives=5, min_difference=4)
     assert len(pool) == 3
 
@@ -354,7 +366,7 @@ def _person(person_id, availability=1.0, python_level=4.0, react_level=None):
 
 
 def _dated(*requirements):
-    return ProjectInput(id="proj-test", skill_requirements=list(requirements), date_ranges=[SPAN])
+    return _single(*requirements, date_range=SPAN)
 
 
 def test_part_time_people_combine_to_cover_the_need(solver):
@@ -400,7 +412,7 @@ def test_chemistry_does_not_reward_adding_people(solver):
 
 
 def test_single_fte_is_not_split_between_friends(solver, people):
-    project = ProjectInput(id="proj-test", skill_requirements=[_python(max_people=2)])
+    project = _single(_python(max_people=2))
     result = solver.solve(project, people, AssignmentWeights(performance=0.0, growth=0.0, cost=0.0, chemistry=1.0))
     assert len(result.members) == 1
     assert result.members[0].fte_allocation == pytest.approx(1.0)

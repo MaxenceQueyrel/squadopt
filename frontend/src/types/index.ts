@@ -104,7 +104,7 @@ export interface AssignedMember {
   person_id: string;
   fte_allocation: number; // 0.2–1, the sum of skill_allocations
   skill_allocations: SkillAllocation[]; // shares > 0 in requirement order; empty for current staffing
-  phase_id: string | null;
+  phase_id: string;
 }
 
 export interface Team {
@@ -159,10 +159,9 @@ export interface SkillCoverage {
   met: boolean;
 }
 
-// One per phase in project.phases order; phase_id is null only on teams saved before every
-// project had phases.
+// One per phase in project.phases order.
 export interface PhaseCoverage {
-  phase_id: string | null;
+  phase_id: string;
   required_fte: number;
   staffed_fte: number;
   available_fte: number; // what the eligible pool could supply during the phase
@@ -173,7 +172,7 @@ export interface PhaseCoverage {
 export type InfeasibilityReason = "fte_not_reachable";
 
 export interface PhaseConflict {
-  phase_id: string | null;
+  phase_id: string;
   reason: InfeasibilityReason;
   required_fte: number; // the sum of the phase's skill FTE
   need_fte: number; // FTE the solver had to staff exactly, after capping by pool capacity

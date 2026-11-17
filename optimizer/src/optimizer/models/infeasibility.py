@@ -15,11 +15,9 @@ class InfeasibilityReason(StrEnum):
 
 
 class PhaseConflict(BaseModel):
-    phase_id: str | None = Field(description="Identifier of the phase, or None for a project without phases.")
+    phase_id: str = Field(description="Identifier of the phase.")
     reason: InfeasibilityReason = Field(description="Which constraints make the phase unsolvable.")
-    required_fte: float = Field(
-        description="FTE the phase (or project) asks to staff, i.e. the sum of its skill requirements' fte."
-    )
+    required_fte: float = Field(description="FTE the phase asks to staff, i.e. the sum of its skill requirements' fte.")
     need_fte: float = Field(
         description="FTE the solver had to staff: each skill's fte capped by what its qualified people can supply."
     )

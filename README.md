@@ -234,7 +234,7 @@ Data is split across two stores:
 
 ## Optimization model
 
-The solver (`optimizer/`) formulates team formation as a **Mixed-Integer Linear Program (MILP)** solved with [PuLP](https://coin-or.github.io/pulp/) / CBC. It decides how many days per week each person gives to each required skill. A **scope** is either a project without phases or one phase of a phased project. The model below describes one scope; phases, alternatives, start windows and portfolios extend it.
+The solver (`optimizer/`) formulates team formation as a **Mixed-Integer Linear Program (MILP)** solved with [PuLP](https://coin-or.github.io/pulp/) / CBC. It decides how many days per week each person gives to each required skill. A project is staffed through its **phases** (at least one), and each phase is a **scope** with its own skill requirements and optional date range. The model below describes one scope; multiple phases, alternatives, start windows and portfolios extend it.
 
 ### Allocation grid
 
@@ -340,7 +340,7 @@ Availability is the day-weighted average of the person's daily ratio over the sc
 
 $$\text{avail}_i = \frac{\displaystyle\sum_{d \in \mathcal{D}} \text{ratio}_i(d)}{|\mathcal{D}|}$$
 
-where $\mathcal{D}$ is the union of the scope's date-range days, and $\text{ratio}_i(d)$ is resolved in order:
+where $\mathcal{D}$ is the days of the scope's date range, and $\text{ratio}_i(d)$ is resolved in order:
 
 1. 0 on the person's `vacations` days;
 2. otherwise the lowest ratio of the `availability_windows` covering $d$;
@@ -350,7 +350,7 @@ A scope without dates uses the base ratio.
 
 ### Phased projects
 
-Each phase $t$ is its own scope, with its own skill requirements and date range. All phases are solved in a **single MILP**. Variables become phase-indexed ($d_{ikt}$, $x_{it}$, …), and every phase keeps its own constraints and need $N_t$.
+Each phase $t$ is its own scope. All phases are solved in a **single MILP**. Variables become phase-indexed ($d_{ikt}$, $x_{it}$, …), and every phase keeps its own constraints and need $N_t$.
 
 With $w_\text{hand} = 0$ the objective is separable, so the optimum equals solving each phase alone. With $w_\text{hand} > 0$, the FTE a person keeps between consecutive phases is rewarded, for every person feasible in both:
 
@@ -370,7 +370,7 @@ Alternatives therefore differ in people, not merely in allocations, and phased p
 
 ### Flexible start window
 
-When a project has a `start_window`, `solve_pool_over_starts` also picks the start date. Candidate starts are weekly from the window's start to its end; the API caps the window at 52 candidates. At each candidate, the whole schedule (every date range, including phases) is shifted rigidly so its earliest date lands on the candidate, and the optimum is solved there. Candidates rank fully covered first, then highest score, then earliest start. The full pool of alternatives is built at the best start only.
+When a project has a `start_window`, `solve_pool_over_starts` also picks the start date. Candidate starts are weekly from the window's start to its end; the API caps the window at 52 candidates. At each candidate, the whole schedule (every phase's date range) is shifted rigidly so its earliest date lands on the candidate, and the optimum is solved there. Candidates rank fully covered first, then highest score, then earliest start. The full pool of alternatives is built at the best start only.
 
 ### Portfolio (batch) solve
 

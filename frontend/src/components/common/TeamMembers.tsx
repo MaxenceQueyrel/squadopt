@@ -84,11 +84,11 @@ export function TeamMembers({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
       {phases.map((phaseId) => (
-        <div key={phaseId ?? "unassigned"}>
+        <div key={phaseId}>
           <div
             style={{ fontSize: "0.78rem", fontWeight: 600, color: colors.primary, marginBottom: 2 }}
           >
-            {phaseId ?? "Unassigned"}
+            {phaseId}
           </div>
           <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
             {rows.filter((r) => r.member.phase_id === phaseId).map(renderRow)}

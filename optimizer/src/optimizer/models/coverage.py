@@ -11,10 +11,8 @@ class SkillCoverage(BaseModel):
 
 
 class PhaseCoverage(BaseModel):
-    phase_id: str | None = Field(description="Identifier of the phase, or None for a project without phases.")
-    required_fte: float = Field(
-        description="FTE the phase (or project) asks to staff, i.e. the sum of its skill requirements' fte."
-    )
+    phase_id: str = Field(description="Identifier of the phase.")
+    required_fte: float = Field(description="FTE the phase asks to staff, i.e. the sum of its skill requirements' fte.")
     staffed_fte: float = Field(description="FTE actually allocated to the selected members.")
     available_fte: float = Field(description="Total FTE the eligible pool could supply during this phase.")
     fte_met: bool = Field(description="Whether staffed_fte reaches required_fte.")

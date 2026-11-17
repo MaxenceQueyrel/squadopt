@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from optimizer.models import AvailabilityWindow, DateRange, PersonInput, ProjectInput
+from optimizer.models import AvailabilityWindow, DateRange, PersonInput
 
 
 def base_availability_ratio(person: PersonInput) -> float:
@@ -17,9 +17,9 @@ def base_availability_ratio(person: PersonInput) -> float:
 
 
 def effective_availability(
-    person: PersonInput, project: ProjectInput, assignments: list[AvailabilityWindow] | None = None
+    person: PersonInput, date_range: DateRange | None, assignments: list[AvailabilityWindow] | None = None
 ) -> float:
-    """Computes the person's availability ratio for the project's calendar.
+    """Computes the person's availability ratio over a phase's calendar span.
 
     Each day's ratio is resolved in precedence order: a day inside person.vacations is
     0; otherwise the minimum ratio of the person.availability_windows covering it;
@@ -29,24 +29,18 @@ def effective_availability(
     Args:
         person: The candidate person, with their working pattern, vacations and
             availability windows.
-        project: The project, with an optional set of date ranges it runs during.
+        date_range: The span to average over, e.g. a phase's date_range. None means no
+            date constraint.
         assignments: The person's active project commitments, as date-ranged ratios of
             FTE, subtracted from the base ratio on days no vacation or window covers.
 
     Returns:
-        The day-weighted average of the daily ratios across project.date_ranges. If the
-        project has no date ranges, returns the base ratio from the working pattern.
+        The day-weighted average of the daily ratios across date_range. If date_range
+        is None, returns the base ratio from the working pattern.
     """
-    if not project.date_ranges:
+    if date_range is None:
         return base_availability_ratio(person)
-
-    weighted_days = 0.0
-    total_days = 0
-    for date_range in project.date_ranges:
-        weighted_days += _weighted_ratio_sum(person, date_range, assignments)
-        total_days += _days_in(date_range)
-
-    return weighted_days / total_days
+    return _weighted_ratio_sum(person, date_range, assignments) / _days_in(date_range)
 
 
 def daily_availability(
@@ -62,7 +56,7 @@ def daily_availability(
     Args:
         person: The candidate person, with their working pattern, vacations and
             availability windows.
-        date_range: The date range to break down (e.g. one of a project's date_ranges).
+        date_range: The date range to break down (e.g. a phase's date_range).
         assignments: The person's active project commitments, as date-ranged ratios of
             FTE, subtracted from the base ratio on days no vacation or window covers.
 

@@ -1,4 +1,4 @@
-from optimizer.models import ProjectInput, PersonInput, AssignmentWeights, Seniority
+from optimizer.models import ProjectPhase, PersonInput, AssignmentWeights, Seniority
 
 MAX_SKILL_LEVEL = 5.0  # matches the documented bound on SkillLevel.level
 
@@ -12,14 +12,14 @@ COST_EFFICIENCY = {
 
 
 def compute_skill_scores(
-    project: ProjectInput,
+    phase: ProjectPhase,
     people: list[PersonInput],
     weights: AssignmentWeights,
 ) -> dict[tuple[str, str], float]:
     """Computes a weighted composite score, per FTE, for each person filling each required skill.
 
     Args:
-        project: The project whose skill requirements define the scoring context.
+        phase: The phase whose skill requirements define the scoring context.
         people: Pool of candidate persons to score.
         weights: Per-objective weights controlling how performance, growth, cost and preference contribute.
 
@@ -33,7 +33,7 @@ def compute_skill_scores(
     scores = {}
     for person in people:
         levels = {s.id: s.level for s in person.skills}
-        for req in project.skill_requirements:
+        for req in phase.skill_requirements:
             scores[person.id, req.id] = (
                 weights.performance * levels.get(req.id, 0.0) / MAX_SKILL_LEVEL
                 + weights.growth * float(req.id in person.growth_targets)

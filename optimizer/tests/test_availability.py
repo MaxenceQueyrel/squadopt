@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from optimizer.availability import base_availability_ratio, daily_availability, effective_availability
-from optimizer.models import AvailabilityWindow, DateRange, PersonInput, ProjectInput, Seniority
+from optimizer.models import AvailabilityWindow, DateRange, PersonInput, Seniority
 
 
 def _person(working_days_per_week=5, availability_windows=None, vacations=None):
@@ -15,10 +15,6 @@ def _person(working_days_per_week=5, availability_windows=None, vacations=None):
         availability_windows=availability_windows or [],
         vacations=vacations or [],
     )
-
-
-def _project(date_ranges=None):
-    return ProjectInput(id="proj", date_ranges=date_ranges or [])
 
 
 @pytest.mark.parametrize(("days", "ratio"), [(1, 0.2), (3, 0.6), (4, 0.8), (5, 1.0), (6, 1.0), (7, 1.0)])
@@ -36,18 +32,17 @@ def test_working_days_per_week_outside_one_to_seven_is_rejected(days):
         _person(working_days_per_week=days)
 
 
-def test_no_date_ranges_falls_back_to_working_pattern():
+def test_no_date_range_falls_back_to_working_pattern():
     person = _person(working_days_per_week=4)
-    project = _project()
-    assert effective_availability(person, project) == 0.8
+    assert effective_availability(person, None) == 0.8
 
 
 def test_window_fully_covering_range_overrides_capacity():
     person = _person(
         availability_windows=[AvailabilityWindow(start=date(2026, 1, 5), end=date(2026, 1, 25), ratio=0.4)],
     )
-    project = _project([DateRange(start=date(2026, 1, 5), end=date(2026, 1, 25))])
-    assert effective_availability(person, project) == 0.4
+    date_range = DateRange(start=date(2026, 1, 5), end=date(2026, 1, 25))
+    assert effective_availability(person, date_range) == 0.4
 
 
 def test_uncovered_days_fall_back_to_working_pattern():
@@ -55,8 +50,8 @@ def test_uncovered_days_fall_back_to_working_pattern():
         working_days_per_week=3,
         availability_windows=[AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 10), ratio=1.0)],
     )
-    project = _project([DateRange(start=date(2026, 1, 11), end=date(2026, 1, 20))])
-    assert effective_availability(person, project) == 0.6
+    date_range = DateRange(start=date(2026, 1, 11), end=date(2026, 1, 20))
+    assert effective_availability(person, date_range) == 0.6
 
 
 def test_overlapping_windows_use_minimum_ratio():
@@ -70,25 +65,20 @@ def test_overlapping_windows_use_minimum_ratio():
             AvailabilityWindow(start=date(2026, 1, 4), end=date(2026, 1, 10), ratio=0.6),
         ],
     )
-    project = _project([DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))])
-    assert effective_availability(person, project) == pytest.approx(0.66)
+    date_range = DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))
+    assert effective_availability(person, date_range) == pytest.approx(0.66)
 
 
-def test_day_weighted_average_across_spans_and_windows():
+def test_day_weighted_average_across_windows():
+    # Jan 5-15 at 1.0 (11 days), Jan 16-25 at 0.5 (10 days): 16 / 21
     person = _person(
         availability_windows=[
             AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 15), ratio=1.0),
             AvailabilityWindow(start=date(2026, 1, 16), end=date(2026, 1, 31), ratio=0.5),
-            AvailabilityWindow(start=date(2026, 3, 1), end=date(2026, 3, 31), ratio=0.8),
         ],
     )
-    project = _project(
-        [
-            DateRange(start=date(2026, 1, 5), end=date(2026, 1, 25)),
-            DateRange(start=date(2026, 3, 2), end=date(2026, 3, 19)),
-        ]
-    )
-    assert effective_availability(person, project) == pytest.approx(0.779, abs=0.01)
+    date_range = DateRange(start=date(2026, 1, 5), end=date(2026, 1, 25))
+    assert effective_availability(person, date_range) == pytest.approx(16 / 21)
 
 
 def test_daily_availability_no_windows_falls_back_to_working_pattern():
@@ -147,8 +137,7 @@ def test_daily_availability_agrees_with_effective_availability_weighted_average(
     total_days = (date_range.end - date_range.start).days + 1
     weighted_average = sum(((end - start).days + 1) * ratio for start, end, ratio in segments) / total_days
 
-    project = _project([date_range])
-    assert weighted_average == pytest.approx(effective_availability(person, project))
+    assert weighted_average == pytest.approx(effective_availability(person, date_range))
 
 
 def test_daily_availability_assignment_reduces_default_ratio():
@@ -209,10 +198,10 @@ def test_daily_availability_no_assignments_is_unchanged():
 
 def test_effective_availability_assignment_reduces_ratio():
     person = _person()
-    project = _project([DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))])
+    date_range = DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))
     assignments = [AvailabilityWindow(start=date(2026, 1, 1), end=date(2026, 1, 10), ratio=0.4)]
 
-    assert effective_availability(person, project, assignments) == pytest.approx(0.6)
+    assert effective_availability(person, date_range, assignments) == pytest.approx(0.6)
 
 
 def test_assignment_reduces_working_pattern_ratio():
@@ -269,12 +258,12 @@ def test_vacation_outside_range_is_ignored():
 def test_effective_availability_combines_working_pattern_and_vacation():
     # 8 working days at 4/5 and 2 vacation days: (8 * 0.8 + 2 * 0) / 10 = 0.64
     person = _person(working_days_per_week=4, vacations=[DateRange(start=date(2026, 1, 9), end=date(2026, 1, 10))])
-    project = _project([DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))])
+    date_range = DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))
 
-    assert effective_availability(person, project) == pytest.approx(0.64)
+    assert effective_availability(person, date_range) == pytest.approx(0.64)
 
 
-def test_vacations_do_not_apply_without_project_date_ranges():
+def test_vacations_do_not_apply_without_a_date_range():
     person = _person(working_days_per_week=4, vacations=[DateRange(start=date(2026, 1, 1), end=date(2026, 1, 10))])
 
-    assert effective_availability(person, _project()) == 0.8
+    assert effective_availability(person, None) == 0.8
