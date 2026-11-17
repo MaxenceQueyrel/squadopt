@@ -23,7 +23,7 @@ from optimizer.objectives import compute_skill_scores
 from optimizer.constraints import feasible_people
 from optimizer.availability import effective_availability
 from optimizer.coverage import compute_coverage
-from optimizer.domain.solver import AssignmentSolverPort, InfeasibleAssignmentError, InfeasiblePortfolioError
+from optimizer.domain.solver import AssignmentSolverPort, InfeasibleAssignmentError
 from optimizer.grid import ALLOCATION_STEP, STEPS_PER_FTE, floor_to_steps
 from optimizer.schedule import schedule_anchor, shift_project
 
@@ -41,9 +41,9 @@ type DayVars = dict[str, dict[str, pulp.LpVariable]]
 # (phase_id, scoped project, candidates, x, days) for one phase, or the whole of an
 # unphased project; a project is a list of them, in phase order.
 type Phase = tuple[str | None, ProjectInput, list[PersonInput], dict[str, pulp.LpVariable], DayVars]
-# (person_id, period, scope indices, cap): the person's day-steps over those scopes,
-# all active during period, must not exceed cap. period is None for the scopes without dates.
-type Coupling = tuple[str, DateRange | None, list[int], int]
+# (person_id, scope indices, cap): the person's day-steps over those scopes, all active
+# during one period, must not exceed cap.
+type Coupling = tuple[str, list[int], int]
 
 
 class PuLPTeamAssignmentSolver(AssignmentSolverPort):
@@ -54,16 +54,14 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         project: ProjectInput,
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool = True,
     ) -> AssignmentResult:
-        return self.solve_pool(project, people, weights, respect_exclusions, n_alternatives=0)[0]
+        return self.solve_pool(project, people, weights, n_alternatives=0)[0]
 
     def solve_pool(
         self,
         project: ProjectInput,
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool = True,
         n_alternatives: int = 2,
         min_difference: int = 2,
     ) -> list[AssignmentResult]:
@@ -72,7 +70,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         # can then span every phase so alternatives are ranked by total project score.
         model = pulp.LpProblem("team_assignment", pulp.LpMaximize)
         phases, need_per_phase, objective_terms, headcount = self._build_project(
-            model, "", project, people, weights, respect_exclusions, staff_exactly=True
+            model, "", project, people, weights, staff_exactly=True
         )
         if not headcount:
             return [self._result(project.id, phases, [], score=0.0, max_score=0.0)]
@@ -87,9 +85,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
             model.solve(pulp.PULP_CBC_CMD(msg=False))
             if pulp.LpStatus[model.status] != "Optimal":
                 if not pool:
-                    raise InfeasibleAssignmentError(
-                        project.id, self._diagnose(phases, need_per_phase, weights, staff_exactly=True)
-                    )
+                    raise InfeasibleAssignmentError(project.id, self._diagnose(phases, need_per_phase, weights))
                 break  # the cuts exclude every remaining team
 
             selected = [
@@ -121,7 +117,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         people: list[PersonInput],
         weights: AssignmentWeights,
         start_window: DateRange,
-        respect_exclusions: bool = True,
         n_alternatives: int = 2,
         min_difference: int = 2,
     ) -> StartDateScan:
@@ -136,7 +131,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         while start <= start_window.end:
             # Only the optimum is needed to rank a start; the pool is built once, at the winner.
             try:
-                optimum = self.solve(shift_project(project, start - anchor), people, weights, respect_exclusions)
+                optimum = self.solve(shift_project(project, start - anchor), people, weights)
             except InfeasibleAssignmentError as exc:
                 errors.append(exc)
                 candidates.append(StartCandidate(start=start, feasible=False))
@@ -162,7 +157,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
             shift_project(project, best_start - anchor),
             people,
             weights,
-            respect_exclusions,
             n_alternatives=n_alternatives,
             min_difference=min_difference,
         )
@@ -177,13 +171,12 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         projects: list[PortfolioProject],
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool = True,
     ) -> PortfolioResult:
         # Phases may be staffed below their need here, so projects competing for the
         # same people trade staffing instead of making the whole model infeasible.
         model = pulp.LpProblem("portfolio_assignment", pulp.LpMaximize)
         built = [
-            self._build_project(model, f"{i}_", project, people, weights, respect_exclusions, staff_exactly=False)
+            self._build_project(model, f"{i}_", project, people, weights, staff_exactly=False)
             for i, project in enumerate(projects)
         ]
         if not any(headcount for _, _, _, headcount in built):
@@ -200,8 +193,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
             for i, (phases, need_per_phase, _, _) in enumerate(built)
             for phase, need in zip(phases, need_per_phase)
         ]
-        couplings = self._couplings([phase for _, _, phase in scopes])
-        for person_id, _, active, cap in couplings:
+        for person_id, active, cap in self._couplings([phase for _, _, phase in scopes]):
             model += pulp.lpSum(d for s in active for d in scopes[s][2][4][person_id].values()) <= cap
 
         steps_by_tier = {tier: [] for tier in ProjectPriority}
@@ -213,13 +205,12 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         stages = [*tier_steps, pulp.lpSum(quality) - HEADCOUNT_PENALTY * pulp.lpSum(all_headcount)]
 
         # Lexicographic: each tier's staffed steps, critical first, are maximised and then
-        # held as a floor, so no later stage can trade them away. Each floor is met by the
-        # previous optimum, so only the first stage can be infeasible.
+        # held as a floor, so no later stage can trade them away. Staffing nothing meets
+        # every constraint of the first stage, and each floor is met by the previous
+        # optimum, so every stage is feasible.
         for stage, objective in enumerate(stages):
             model.setObjective(objective)
             model.solve(pulp.PULP_CBC_CMD(msg=False))
-            if pulp.LpStatus[model.status] != "Optimal":
-                raise self._diagnose_portfolio(projects, built, scopes, couplings, weights)
             if stage < len(tier_steps):
                 model += objective >= round(pulp.value(objective))
 
@@ -249,7 +240,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         project: ProjectInput,
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool,
         staff_exactly: bool,
     ) -> tuple[list[Phase], list[int], list, list]:
         # Returns the project's phases, their needs in allocation steps, its objective
@@ -265,7 +255,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         phases: list[Phase] = []
         need_per_phase = []
         for k, (phase_id, scoped) in enumerate(scopes):
-            candidates = feasible_people(scoped, people, respect_exclusions)
+            candidates = feasible_people(scoped, people)
             if not candidates:
                 phases.append((phase_id, scoped, [], {}, {}))
                 need_per_phase.append(0)
@@ -337,61 +327,8 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
                     continue
                 window = ProjectInput(id="period", date_ranges=[period] if period is not None else [])
                 cap = floor_to_steps(min(effective_availability(person, window, person.assignments), 1.0))
-                couplings.append((person.id, period, active, cap))
+                couplings.append((person.id, active, cap))
         return couplings
-
-    def _diagnose_portfolio(
-        self,
-        projects: list[PortfolioProject],
-        built: list[tuple[list[Phase], list[int], list, list]],
-        scopes: list[tuple[int, int, Phase]],
-        couplings: list[Coupling],
-        weights: AssignmentWeights,
-    ) -> InfeasiblePortfolioError:
-        # Below its need, a phase alone is infeasible only through forced members, which
-        # _diagnose attributes. Across phases, the only coupling is shared capacity, and a
-        # forced member needs at least one step per scope (any selected member can drop to
-        # one), so the joint model is infeasible beyond that exactly when a person is forced
-        # into more overlapping scopes than they have steps.
-        conflicts = [
-            self._diagnose(phases, need_per_phase, weights, staff_exactly=False)
-            for phases, need_per_phase, _, _ in built
-        ]
-
-        forced = [
-            {p.id for p in candidates if p.id in scoped.included_person_ids}
-            for _, _, (_, scoped, candidates, _, _) in scopes
-        ]
-        reported = set()
-        for person_id, period, active, cap in couplings:
-            forced_active = [s for s in active if person_id in forced[s]]
-            key = (person_id, tuple(forced_active))
-            if len(forced_active) <= cap or key in reported:
-                continue
-            reported.add(key)
-            project_ids = list(dict.fromkeys(projects[scopes[s][0]].id for s in forced_active))
-            for s in forced_active:
-                i, need, (phase_id, scoped, _, _, _) = scopes[s]
-                conflicts[i].append(
-                    PhaseConflict(
-                        phase_id=phase_id,
-                        reason=InfeasibilityReason.CROSS_PROJECT_FORCED_CONFLICT,
-                        required_fte=round(sum(req.fte for req in scoped.skill_requirements), 6),
-                        need_fte=need / STEPS_PER_FTE,
-                        forced_person_ids=[person_id],
-                        person_id=person_id,
-                        project_ids=project_ids,
-                        period=period,
-                    )
-                )
-
-        return InfeasiblePortfolioError(
-            [
-                InfeasibleAssignmentError(project.id, project_conflicts)
-                for project, project_conflicts in zip(projects, conflicts)
-                if project_conflicts
-            ]
-        )
 
     def _member(self, phase_id: str | None, person_id: str, days: dict[str, pulp.LpVariable]) -> AssignedMember:
         steps = {skill_id: round(d.value()) for skill_id, d in days.items()}
@@ -421,45 +358,28 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         )
 
     def _diagnose(
-        self, phases: list[Phase], need_per_phase: list[int], weights: AssignmentWeights, staff_exactly: bool
+        self, phases: list[Phase], need_per_phase: list[int], weights: AssignmentWeights
     ) -> list[PhaseConflict]:
-        # Phases share no hard constraint (handover is only rewarded), so the joint model
-        # is infeasible exactly when some phase is infeasible on its own. The cause is
-        # identified by the relaxation that makes that phase solvable again.
-        conflicts = []
-        for (phase_id, scoped, candidates, _, _), need in zip(phases, need_per_phase):
-            if not candidates or self._is_feasible(scoped, candidates, weights, need, staff_exactly):
-                continue
-            candidate_ids = {p.id for p in candidates}
-            forced_ids = [pid for pid in scoped.included_person_ids if pid in candidate_ids]
-            if forced_ids and self._is_feasible(
-                scoped.model_copy(update={"included_person_ids": []}), candidates, weights, need, staff_exactly
-            ):
-                reason = InfeasibilityReason.FORCED_MEMBER_CONFLICT
-            else:
-                reason = InfeasibilityReason.FTE_NOT_REACHABLE
-                forced_ids = []
-            conflicts.append(
-                PhaseConflict(
-                    phase_id=phase_id,
-                    reason=reason,
-                    required_fte=round(sum(req.fte for req in scoped.skill_requirements), 6),
-                    need_fte=need / STEPS_PER_FTE,
-                    forced_person_ids=forced_ids,
-                )
+        # A safety net: the need is what the phase's own allocation constraints can staff,
+        # so no phase is expected to be infeasible. Phases share no hard constraint
+        # (handover is only rewarded), so the joint model is infeasible exactly when some
+        # phase is infeasible on its own.
+        return [
+            PhaseConflict(
+                phase_id=phase_id,
+                reason=InfeasibilityReason.FTE_NOT_REACHABLE,
+                required_fte=round(sum(req.fte for req in scoped.skill_requirements), 6),
+                need_fte=need / STEPS_PER_FTE,
             )
-        return conflicts
+            for (phase_id, scoped, candidates, _, _), need in zip(phases, need_per_phase)
+            if candidates and not self._is_feasible(scoped, candidates, weights, need)
+        ]
 
     def _is_feasible(
-        self,
-        project: ProjectInput,
-        candidates: list[PersonInput],
-        weights: AssignmentWeights,
-        need: int,
-        staff_exactly: bool,
+        self, project: ProjectInput, candidates: list[PersonInput], weights: AssignmentWeights, need: int
     ) -> bool:
         model = pulp.LpProblem("feasibility", pulp.LpMaximize)
-        _, _, terms, _ = self._build_phase(model, "0", project, candidates, weights, need, staff_exactly)
+        _, _, terms, _ = self._build_phase(model, "0", project, candidates, weights, need, staff_exactly=True)
         model += pulp.lpSum(terms)
         model.solve(pulp.PULP_CBC_CMD(msg=False))
         return pulp.LpStatus[model.status] == "Optimal"
@@ -484,8 +404,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         return ProjectInput(
             id=project.id,
             skill_requirements=phase.skill_requirements,
-            excluded_person_ids=project.excluded_person_ids,
-            included_person_ids=project.included_person_ids,
             date_ranges=[phase.date_range] if phase.date_range else [],
         )
 
@@ -524,9 +442,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
 
     def _staffable_steps(self, project: ProjectInput, candidates: list[PersonInput]) -> int:
         # The need: each skill's FTE capped by what its qualified people can supply, solved
-        # jointly since one person's availability may be claimed by several skills. Forced
-        # members are left out so that a need they can't fit surfaces as an infeasibility
-        # _diagnose can attribute to them.
+        # jointly since one person's availability may be claimed by several skills.
         model = pulp.LpProblem("capacity", pulp.LpMaximize)
         days, _ = self._add_allocations(model, "0", project, candidates)
         all_days = [d for person_days in days.values() for d in person_days.values()]
@@ -565,8 +481,7 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         scores = compute_skill_scores(project, candidates, weights)
         days, fills = self._add_allocations(model, prefix, project, candidates)
         x = {p.id: pulp.LpVariable(f"x_{prefix}_{p.id}", cat="Binary") for p in candidates}
-        # A person is selected exactly when they fill at least one skill, so a forced
-        # member who qualifies for none makes the phase infeasible.
+        # A person is selected exactly when they fill at least one skill.
         for person_id, person_fills in fills.items():
             model += x[person_id] <= pulp.lpSum(person_fills.values())
             for y in person_fills.values():
@@ -576,9 +491,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
             model += staffed == need
         else:
             model += staffed <= need
-        for person_id in project.included_person_ids:
-            if person_id in x:
-                model += x[person_id] == 1
 
         # Weighted by FTE so the score reflects the capacity delivered, not headcount.
         objective_terms = [

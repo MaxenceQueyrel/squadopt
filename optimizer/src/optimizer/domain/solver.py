@@ -37,8 +37,7 @@ class InfeasiblePortfolioError(InfeasibleAssignmentError):
 
     Attributes:
         project_errors: One error per infeasible project, in input order, each with that
-            project's conflicts. A CROSS_PROJECT_FORCED_CONFLICT is listed under every
-            project it involves, once per phase of that project.
+            project's conflicts.
     """
 
     def __init__(self, project_errors: list[InfeasibleAssignmentError]) -> None:
@@ -62,7 +61,6 @@ class AssignmentSolverPort(ABC):
         project: ProjectInput,
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool = True,
     ) -> AssignmentResult:
         """Finds the optimal team assignment for a project.
 
@@ -70,7 +68,6 @@ class AssignmentSolverPort(ABC):
             project: The project requirements and constraints.
             people: Pool of candidate people to assign.
             weights: Relative weights for performance, chemistry, growth and cost.
-            respect_exclusions: Whether to honour project.excluded_person_ids.
 
         Returns:
             An AssignmentResult with the selected members, a composite score, and the
@@ -86,7 +83,6 @@ class AssignmentSolverPort(ABC):
         project: ProjectInput,
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool = True,
         n_alternatives: int = 2,
         min_difference: int = 2,
     ) -> list[AssignmentResult]:
@@ -101,7 +97,6 @@ class AssignmentSolverPort(ABC):
             project: The project requirements and constraints.
             people: Pool of candidate people to assign.
             weights: Relative weights for performance, chemistry, growth and cost.
-            respect_exclusions: Whether to honour project.excluded_person_ids.
             n_alternatives: Maximum number of alternatives to return after the optimum.
             min_difference: Minimum number of members each alternative must swap out
                 relative to every earlier team; clamped to the team size.
@@ -122,7 +117,6 @@ class AssignmentSolverPort(ABC):
         people: list[PersonInput],
         weights: AssignmentWeights,
         start_window: DateRange,
-        respect_exclusions: bool = True,
         n_alternatives: int = 2,
         min_difference: int = 2,
     ) -> StartDateScan:
@@ -139,7 +133,6 @@ class AssignmentSolverPort(ABC):
             people: Pool of candidate people to assign.
             weights: Relative weights for performance, chemistry, growth and cost.
             start_window: Earliest and latest allowed start dates, both inclusive.
-            respect_exclusions: Whether to honour project.excluded_person_ids.
             n_alternatives: Maximum number of alternatives to return at the best start.
             min_difference: Minimum number of members each alternative must swap out
                 relative to every earlier team; clamped to the team size.
@@ -163,7 +156,6 @@ class AssignmentSolverPort(ABC):
         projects: list[PortfolioProject],
         people: list[PersonInput],
         weights: AssignmentWeights,
-        respect_exclusions: bool = True,
     ) -> PortfolioResult:
         """Finds the best teams for several projects that compete for the same people, jointly.
 
@@ -179,13 +171,8 @@ class AssignmentSolverPort(ABC):
             projects: The projects to staff, at the dates they should be solved at.
             people: Pool of candidate people shared by every project.
             weights: Relative weights for performance, chemistry, growth and cost.
-            respect_exclusions: Whether to honour each project's excluded_person_ids.
 
         Returns:
             A PortfolioResult with one AssignmentResult per project, in input order, each
             with its own score, max_score, coverage and fully_covered.
-
-        Raises:
-            InfeasiblePortfolioError: If no feasible set of teams exists, with the conflicts
-                of every infeasible project.
         """

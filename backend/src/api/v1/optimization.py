@@ -165,7 +165,7 @@ def solve_batch(
     `ignored_start_window_project_ids`.
 
     Args:
-        request: The projects to staff, the weights and the exclusions toggle.
+        request: The projects to staff and the weights.
         organization_id: The active organization.
 
     Returns:
