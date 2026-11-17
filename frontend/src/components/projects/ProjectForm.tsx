@@ -71,7 +71,7 @@ export function ProjectForm({
       setError("Give every phase an id.");
       return;
     }
-    if (new Set(draft.phases.map((phase) => phase.id)).size < draft.phases.length) {
+    if (new Set(draft.phases.map((phase) => phase.id.trim())).size < draft.phases.length) {
       setError("Give every phase a different id.");
       return;
     }
