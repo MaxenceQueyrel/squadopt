@@ -133,7 +133,7 @@ export function StaffingLaneCard({
               <h2 id={headingId} style={{ margin: 0 }}>
                 {title}
               </h2>
-              {lane.phaseId !== null && lane.dateRanges.length > 0 && (
+              {lane.dateRanges.length > 0 && (
                 <div
                   className="mono"
                   style={{ marginTop: "0.2rem", fontSize: "0.8rem", color: colors.muted }}
@@ -409,7 +409,8 @@ export function AssignForm({
         ratio,
         start: range.start,
         end: range.end,
-        phase_id: lane.phaseId,
+        // Only the unphased lane has no phase, and it offers no assign form.
+        phase_id: lane.phaseId!,
       });
     } finally {
       setSaving(false);

@@ -410,7 +410,13 @@ test("a user without optimization:run sees no Optimize button", async ({ page })
     await page.request.post("/api/v1/projects/", {
       data: {
         name: projectName,
-        skill_requirements: [{ id: "general", min_level: 0, fte: 1 }],
+        phases: [
+          {
+            id: "main",
+            skill_requirements: [{ id: "general", min_level: 0, fte: 1 }],
+            date_range: null,
+          },
+        ],
       },
       headers: { ...authorization, "X-Organization-Id": organization.id },
     })

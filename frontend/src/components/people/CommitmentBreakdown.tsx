@@ -73,6 +73,9 @@ export function CommitmentBreakdown({
   }`;
   const commitments = commitmentsOverlapping(person, assignments, range);
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? id;
+  // A single-phase project is staffed as a whole, so its phase id is not worth showing.
+  const phaseOf = (a: Assignment) =>
+    (projects.find((p) => p.id === a.project_id)?.phases.length ?? 0) > 1 ? a.phase_id : null;
 
   return (
     <section
@@ -113,6 +116,7 @@ export function CommitmentBreakdown({
               key={commitmentKey(commitment)}
               commitment={commitment}
               projectName={projectName}
+              phaseOf={phaseOf}
               today={today}
             />
           ))}
@@ -131,10 +135,12 @@ function commitmentKey(commitment: Commitment): string {
 function CommitmentItem({
   commitment,
   projectName,
+  phaseOf,
   today,
 }: {
   commitment: Commitment;
   projectName: (id: string) => string;
+  phaseOf: (assignment: Assignment) => string | null;
   today: string;
 }) {
   const span =
@@ -175,8 +181,8 @@ function CommitmentItem({
             >
               {projectName(commitment.assignment.project_id)}
             </Link>
-            {commitment.assignment.phase_id && (
-              <span style={{ color: colors.muted }}> · {commitment.assignment.phase_id}</span>
+            {phaseOf(commitment.assignment) && (
+              <span style={{ color: colors.muted }}> · {phaseOf(commitment.assignment)}</span>
             )}
             <span style={{ marginLeft: "0.5rem" }}>
               {formatFte(commitment.assignment.ratio)} FTE
