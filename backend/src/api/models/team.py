@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from optimizer.grid import ALLOCATION_STEP, GRID_TOLERANCE, is_on_grid
 from optimizer.models import (
     AssignedMember,
@@ -8,6 +9,8 @@ from optimizer.models import (
     PhaseConflict,
     PhaseCoverage,
 )
+
+from api.models.project import DEFAULT_PHASE_ID
 
 
 # coverage/fully_covered default to empty/None for teams saved before the
@@ -26,6 +29,24 @@ class Team(BaseModel):
     fully_covered: bool | None = None
     created_at: datetime | None = None
     start_date: date | None = None
+
+    # Teams solved before phases became the only staffing scope have members and
+    # coverage with phase_id None; their project migrates to phases whose first
+    # id is "main".
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_unphased(cls, data: dict[str, Any]) -> dict[str, Any]:
+        return {
+            **data,
+            "members": [
+                {**member, "phase_id": member.get("phase_id") or DEFAULT_PHASE_ID}
+                for member in data.get("members", [])
+            ],
+            "coverage": [
+                {**phase, "phase_id": phase.get("phase_id") or DEFAULT_PHASE_ID}
+                for phase in data.get("coverage", [])
+            ],
+        }
 
 
 class TeamProposal(BaseModel):

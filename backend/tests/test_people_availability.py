@@ -135,6 +135,7 @@ def test_assignment_reduces_computed_availability(client, org_headers):
             "ratio": 0.4,
             "start": "2026-01-01",
             "end": "2026-01-10",
+            "phase_id": "main",
         },
         headers=org_headers,
     )
@@ -169,6 +170,7 @@ def test_availability_window_overrides_assignment_reduction(client, org_headers)
             "ratio": 0.4,
             "start": "2026-01-01",
             "end": "2026-01-10",
+            "phase_id": "main",
         },
         headers=org_headers,
     )

@@ -39,9 +39,7 @@ def create_team(data: TeamCreate, organization_id: str = Depends(require_org_mem
 
 
 def _schedule(project: Project) -> ProjectInput:
-    return ProjectInput(
-        id=project.id, date_ranges=project.date_ranges, phases=project.phases
-    )
+    return ProjectInput(id=project.id, phases=project.phases)
 
 
 def _start_offset(project: Project, start: date) -> timedelta:
@@ -55,40 +53,29 @@ def _start_offset(project: Project, start: date) -> timedelta:
 
 def _shift_schedule(project: Project, offset: timedelta) -> Project:
     shifted = shift_project(_schedule(project), offset)
-    return project.model_copy(
-        update={"date_ranges": shifted.date_ranges, "phases": shifted.phases}
-    )
+    return project.model_copy(update={"phases": shifted.phases})
 
 
 def _resolve_assignments(team: Team, project: Project) -> list[AssignmentCreate]:
     phases_by_id = {phase.id: phase for phase in project.phases}
     resolved: list[AssignmentCreate] = []
     for member in team.members:
-        if member.phase_id is not None:
-            phase = phases_by_id.get(member.phase_id)
-            if phase is None or phase.date_range is None:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Phase '{member.phase_id}' has no date range",
-                )
-            date_ranges = [phase.date_range]
-        else:
-            if not project.date_ranges:
-                raise HTTPException(
-                    status_code=400, detail="Project has no date ranges"
-                )
-            date_ranges = project.date_ranges
-        for date_range in date_ranges:
-            resolved.append(
-                AssignmentCreate(
-                    person_id=member.person_id,
-                    project_id=project.id,
-                    ratio=member.fte_allocation,
-                    start=date_range.start,
-                    end=date_range.end,
-                    phase_id=member.phase_id,
-                )
+        phase = phases_by_id.get(member.phase_id)
+        if phase is None or phase.date_range is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Phase '{member.phase_id}' has no date range",
             )
+        resolved.append(
+            AssignmentCreate(
+                person_id=member.person_id,
+                project_id=project.id,
+                ratio=member.fte_allocation,
+                start=phase.date_range.start,
+                end=phase.date_range.end,
+                phase_id=phase.id,
+            )
+        )
     return resolved
 
 
@@ -118,13 +105,12 @@ def _over_allocated_person_ids(
 def apply_team(team_id: str, organization_id: str = Depends(require_org_member)):
     """Commits a team proposal as the project's assignments for the phases it covers.
 
-    Existing project assignments for those phases (or the unphased ones, for a
-    non-phased team) are replaced. A team found at a shifted start
-    (`team.start_date`) first moves the project's whole schedule so it starts
-    on that date, and the project's other assignments move with it;
-    `start_window` is kept. Nothing is written, neither assignments nor
-    project dates, if any date cannot be resolved or any person would exceed
-    1.0 FTE.
+    Existing project assignments for those phases are replaced. A team found
+    at a shifted start (`team.start_date`) first moves the project's whole
+    schedule so it starts on that date, and the project's other assignments
+    move with it; `start_window` is kept. Nothing is written, neither
+    assignments nor project dates, if any date cannot be resolved or any
+    person would exceed 1.0 FTE.
 
     Args:
         team_id: The team to apply.
@@ -135,8 +121,7 @@ def apply_team(team_id: str, organization_id: str = Depends(require_org_member))
 
     Raises:
         HTTPException: 404 if the team or its project is not found; 400 if a
-            phase or the project lacks dates, or if a person would be
-            over-allocated.
+            phase lacks dates, or if a person would be over-allocated.
     """
     team = repo.get(team_id, organization_id)
     if not team:
@@ -226,7 +211,7 @@ def apply_teams(
     Raises:
         HTTPException: 404 if a team or its project is not found; 400 if two
             teams belong to the same project, a team has a shifted start, a
-            phase or project lacks dates, or a person would be over-allocated.
+            phase lacks dates, or a person would be over-allocated.
     """
     teams_and_projects: list[tuple[Team, Project]] = []
     for team_id in request.team_ids:

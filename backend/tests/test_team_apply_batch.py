@@ -9,7 +9,7 @@ from api.repositories.file_repository import FileRepository
 from api.v1 import assignments as assignments_module
 from api.v1 import projects as projects_module
 from api.v1 import teams as teams_module
-from tests.conftest import ONE_FTE_NEED, create_org, register_and_login
+from tests.conftest import ONE_FTE_NEED, create_org, one_phase, register_and_login
 
 
 @pytest.fixture
@@ -36,12 +36,7 @@ PHASES = [
 
 
 def _create_project(client, headers, name, **overrides) -> str:
-    payload = {
-        "name": name,
-        "skill_requirements": [ONE_FTE_NEED],
-        "date_ranges": [JANUARY],
-        **overrides,
-    }
+    payload = {"name": name, "phases": one_phase(date_range=JANUARY), **overrides}
     response = client.post("/api/v1/projects/", json=payload, headers=headers)
     assert response.status_code == 201
     return response.json()["id"]
@@ -61,7 +56,9 @@ def _create_team(client, headers, project_id, members, start_date=None) -> str:
 
 
 def _create_assignment(client, headers, **fields):
-    response = client.post("/api/v1/assignments/", json=fields, headers=headers)
+    response = client.post(
+        "/api/v1/assignments/", json={"phase_id": "main", **fields}, headers=headers
+    )
     assert response.status_code == 201
     return response.json()
 
@@ -80,15 +77,18 @@ def test_apply_batch_creates_every_teams_assignments(client, org_headers):
     apollo = _create_project(client, org_headers, "Apollo")
     gemini = _create_project(client, org_headers, "Gemini")
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 0.6}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 0.6, "phase_id": "main"}],
     )
     gemini_team = _create_team(
         client,
         org_headers,
         gemini,
         [
-            {"person_id": "alice", "fte_allocation": 0.4},
-            {"person_id": "bob", "fte_allocation": 1.0},
+            {"person_id": "alice", "fte_allocation": 0.4, "phase_id": "main"},
+            {"person_id": "bob", "fte_allocation": 1.0, "phase_id": "main"},
         ],
     )
 
@@ -124,10 +124,16 @@ def test_apply_batch_over_allocation_across_teams_writes_nothing(client, org_hea
         **JANUARY,
     )
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 0.6}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 0.6, "phase_id": "main"}],
     )
     gemini_team = _create_team(
-        client, org_headers, gemini, [{"person_id": "alice", "fte_allocation": 0.6}]
+        client,
+        org_headers,
+        gemini,
+        [{"person_id": "alice", "fte_allocation": 0.6, "phase_id": "main"}],
     )
 
     response = _apply_batch(client, org_headers, [apollo_team, gemini_team])
@@ -150,10 +156,16 @@ def test_apply_batch_counts_kept_assignments_of_other_projects(client, org_heade
         end="2026-02-20",
     )
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 1.0}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
     )
     gemini_team = _create_team(
-        client, org_headers, gemini, [{"person_id": "bob", "fte_allocation": 0.6}]
+        client,
+        org_headers,
+        gemini,
+        [{"person_id": "bob", "fte_allocation": 0.6, "phase_id": "main"}],
     )
 
     response = _apply_batch(client, org_headers, [apollo_team, gemini_team])
@@ -167,7 +179,10 @@ def test_apply_batch_with_a_dateless_team_writes_nothing(client, org_headers):
     apollo = _create_project(client, org_headers, "Apollo")
     gemini = _create_project(client, org_headers, "Gemini", phases=PHASES)
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 1.0}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
     )
     gemini_team = _create_team(
         client,
@@ -225,7 +240,7 @@ def test_apply_batch_replaces_every_assignment_of_each_project(client, org_heade
         client,
         org_headers,
         gemini,
-        [{"person_id": "alice", "fte_allocation": 0.6}],
+        [{"person_id": "alice", "fte_allocation": 0.6, "phase_id": "main"}],
     )
 
     response = _apply_batch(client, org_headers, [apollo_team, gemini_team])
@@ -238,7 +253,7 @@ def test_apply_batch_replaces_every_assignment_of_each_project(client, org_heade
         (a["person_id"], a["project_id"], a["phase_id"], a["ratio"]) for a in stored
     } == {
         ("alice", apollo, "design", 0.4),
-        ("alice", gemini, None, 0.6),
+        ("alice", gemini, "main", 0.6),
     }
 
 
@@ -251,26 +266,26 @@ def test_apply_batch_accepts_partial_overlaps_that_fit_every_period(
         client,
         org_headers,
         "Long",
-        date_ranges=[{"start": "2026-01-05", "end": "2026-01-25"}],
+        phases=one_phase(date_range={"start": "2026-01-05", "end": "2026-01-25"}),
     )
     first = _create_project(
         client,
         org_headers,
         "First",
-        date_ranges=[{"start": "2026-01-05", "end": "2026-01-14"}],
+        phases=one_phase(date_range={"start": "2026-01-05", "end": "2026-01-14"}),
     )
     second = _create_project(
         client,
         org_headers,
         "Second",
-        date_ranges=[{"start": "2026-01-15", "end": "2026-01-25"}],
+        phases=one_phase(date_range={"start": "2026-01-15", "end": "2026-01-25"}),
     )
     team_ids = [
         _create_team(
             client,
             org_headers,
             project_id,
-            [{"person_id": "alice", "fte_allocation": ratio}],
+            [{"person_id": "alice", "fte_allocation": ratio, "phase_id": "main"}],
         )
         for project_id, ratio in ((long, 0.6), (first, 0.4), (second, 0.4))
     ]
@@ -285,7 +300,10 @@ def test_apply_batch_rejects_two_teams_of_the_same_project(client, org_headers):
     apollo = _create_project(client, org_headers, "Apollo")
     team_ids = [
         _create_team(
-            client, org_headers, apollo, [{"person_id": person, "fte_allocation": 1.0}]
+            client,
+            org_headers,
+            apollo,
+            [{"person_id": person, "fte_allocation": 1.0, "phase_id": "main"}],
         )
         for person in ("alice", "bob")
     ]
@@ -305,13 +323,16 @@ def test_apply_batch_rejects_a_shifted_start_team(client, org_headers):
         start_window={"start": "2026-01-01", "end": "2026-03-01"},
     )
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 1.0}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
     )
     shifted_team = _create_team(
         client,
         org_headers,
         gemini,
-        [{"person_id": "bob", "fte_allocation": 1.0}],
+        [{"person_id": "bob", "fte_allocation": 1.0, "phase_id": "main"}],
         start_date="2026-02-01",
     )
 
@@ -333,7 +354,10 @@ def test_apply_batch_with_a_missing_team_returns_404_and_writes_nothing(
 ):
     apollo = _create_project(client, org_headers, "Apollo")
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 1.0}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
     )
 
     response = _apply_batch(client, org_headers, [apollo_team, "does-not-exist"])
@@ -350,7 +374,7 @@ def test_apply_batch_with_a_team_whose_project_is_gone_returns_404(client, org_h
             client,
             org_headers,
             project_id,
-            [{"person_id": "alice", "fte_allocation": 0.4}],
+            [{"person_id": "alice", "fte_allocation": 0.4, "phase_id": "main"}],
         )
         for project_id in (apollo, gemini)
     ]
@@ -365,7 +389,10 @@ def test_apply_batch_with_a_team_whose_project_is_gone_returns_404(client, org_h
 def test_apply_batch_cannot_apply_another_organizations_team(client, org_headers):
     apollo = _create_project(client, org_headers, "Apollo")
     apollo_team = _create_team(
-        client, org_headers, apollo, [{"person_id": "alice", "fte_allocation": 1.0}]
+        client,
+        org_headers,
+        apollo,
+        [{"person_id": "alice", "fte_allocation": 1.0, "phase_id": "main"}],
     )
     other_headers = register_and_login(client, "other-owner@example.com")
     other_org = {

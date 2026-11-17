@@ -16,7 +16,7 @@ from api.v1 import roles as roles_module
 from api.v1 import skills as skills_module
 from api.v1 import teams as teams_module
 from optimizer.models import Seniority
-from tests.conftest import ONE_FTE_NEED, register_and_login
+from tests.conftest import one_phase, register_and_login
 
 
 @pytest.fixture
@@ -356,7 +356,7 @@ def _seed_org_data(client, headers):
     ).json()
     project = client.post(
         "/api/v1/projects/",
-        json={"name": "Project X", "skill_requirements": [ONE_FTE_NEED]},
+        json={"name": "Project X", "phases": one_phase()},
         headers=headers,
     ).json()
     client.post(
@@ -367,6 +367,7 @@ def _seed_org_data(client, headers):
             "ratio": 1.0,
             "start": "2026-01-01",
             "end": "2026-01-31",
+            "phase_id": "main",
         },
         headers=headers,
     )

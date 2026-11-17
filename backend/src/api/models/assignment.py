@@ -1,7 +1,10 @@
 from datetime import date
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from optimizer.grid import ALLOCATION_STEP, GRID_TOLERANCE, STEPS_PER_FTE, is_on_grid
+
+from api.models.project import DEFAULT_PHASE_ID
 
 
 class AssignmentBase(BaseModel):
@@ -13,7 +16,7 @@ class AssignmentBase(BaseModel):
     )
     start: date
     end: date
-    phase_id: str | None = None
+    phase_id: str
 
     @field_validator("ratio")
     @classmethod
@@ -28,6 +31,15 @@ class AssignmentBase(BaseModel):
 class Assignment(AssignmentBase):
     id: str
     organization_id: str
+
+    # Assignments stored before phases became the only staffing scope have no
+    # phase_id; their project migrates to phases whose first id is "main".
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_unphased(cls, data: dict[str, Any]) -> dict[str, Any]:
+        if data.get("phase_id") is not None:
+            return data
+        return {**data, "phase_id": DEFAULT_PHASE_ID}
 
 
 class AssignmentCreate(AssignmentBase):

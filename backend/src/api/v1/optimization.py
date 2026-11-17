@@ -80,12 +80,7 @@ def solve_assignment(
             AvailabilityWindow(start=a.start, end=a.end, ratio=a.ratio)
         )
 
-    project_input = ProjectInput(
-        id=project.id,
-        skill_requirements=project.skill_requirements,
-        date_ranges=project.date_ranges,
-        phases=project.phases,
-    )
+    project_input = ProjectInput(id=project.id, phases=project.phases)
 
     people_inputs = [p.to_person_input(committed.get(p.id, [])) for p in people]
 
@@ -210,8 +205,6 @@ def solve_batch(
     portfolio = [
         PortfolioProject(
             id=project.id,
-            skill_requirements=project.skill_requirements,
-            date_ranges=project.date_ranges,
             phases=project.phases,
             priority=project.priority,
         )
