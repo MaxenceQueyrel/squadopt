@@ -5,7 +5,7 @@ from api.main import app
 from api.models.project import Project
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
-from tests.conftest import ONE_FTE_NEED
+from tests.conftest import ONE_FTE_NEED, one_phase
 
 
 @pytest.fixture
@@ -15,14 +15,14 @@ def client(tmp_path, monkeypatch):
     return TestClient(app)
 
 
-JANUARY = [{"start": "2026-01-05", "end": "2026-01-30"}]
+JANUARY = {"start": "2026-01-05", "end": "2026-01-30"}
 WINDOW = {"start": "2026-01-05", "end": "2026-02-23"}
 
 
 def _create(client, headers, **fields):
     return client.post(
         "/api/v1/projects/",
-        json={"name": "Apollo", "skill_requirements": [ONE_FTE_NEED], **fields},
+        json={"name": "Apollo", "phases": one_phase(), **fields},
         headers=headers,
     )
 
@@ -32,7 +32,9 @@ def _error_message(response) -> str:
 
 
 def test_valid_window_round_trips(client, org_headers):
-    response = _create(client, org_headers, date_ranges=JANUARY, start_window=WINDOW)
+    response = _create(
+        client, org_headers, phases=one_phase(date_range=JANUARY), start_window=WINDOW
+    )
 
     assert response.status_code == 201
     project_id = response.json()["id"]
@@ -47,9 +49,9 @@ def test_window_defaults_to_none(client, org_headers):
     assert response.json()["start_window"] is None
 
 
-def test_window_needs_no_top_level_range_when_a_phase_is_dated(client, org_headers):
+def test_window_needs_only_one_dated_phase(client, org_headers):
     phases = [
-        {"id": "build", "skill_requirements": [ONE_FTE_NEED], "date_range": JANUARY[0]},
+        {"id": "build", "skill_requirements": [ONE_FTE_NEED], "date_range": JANUARY},
         {"id": "undated", "skill_requirements": [ONE_FTE_NEED]},
     ]
 
@@ -59,17 +61,11 @@ def test_window_needs_no_top_level_range_when_a_phase_is_dated(client, org_heade
 
 
 def test_window_on_undated_project_is_rejected(client, org_headers):
-    response = _create(
-        client,
-        org_headers,
-        phases=[{"id": "undated", "skill_requirements": [ONE_FTE_NEED]}],
-        start_window=WINDOW,
-    )
+    response = _create(client, org_headers, start_window=WINDOW)
 
     assert response.status_code == 422
-    assert (
-        "A flexible start needs at least one project or phase date range"
-        in _error_message(response)
+    assert "A flexible start needs at least one phase date range" in _error_message(
+        response
     )
 
 
@@ -77,7 +73,7 @@ def test_window_ending_before_it_starts_is_rejected(client, org_headers):
     response = _create(
         client,
         org_headers,
-        date_ranges=JANUARY,
+        phases=one_phase(date_range=JANUARY),
         start_window={"start": "2026-02-01", "end": "2026-01-31"},
     )
 
@@ -95,7 +91,7 @@ def test_window_is_capped_at_52_weekly_candidates(client, org_headers, end, stat
     response = _create(
         client,
         org_headers,
-        date_ranges=JANUARY,
+        phases=one_phase(date_range=JANUARY),
         start_window={"start": "2026-01-01", "end": end},
     )
 
@@ -105,31 +101,23 @@ def test_window_is_capped_at_52_weekly_candidates(client, org_headers, end, stat
 
 
 def test_update_validates_the_window(client, org_headers):
-    project = _create(client, org_headers, date_ranges=JANUARY).json()
+    project = _create(client, org_headers, phases=one_phase(date_range=JANUARY)).json()
 
     response = client.put(
         f"/api/v1/projects/{project['id']}",
-        json={
-            "name": "Apollo",
-            "skill_requirements": [ONE_FTE_NEED],
-            "start_window": WINDOW,
-        },
+        json={"name": "Apollo", "phases": one_phase(), "start_window": WINDOW},
         headers=org_headers,
     )
 
     assert response.status_code == 422
     stored = client.get(f"/api/v1/projects/{project['id']}", headers=org_headers)
-    assert stored.json()["date_ranges"] == JANUARY
+    assert stored.json()["phases"][0]["date_range"] == JANUARY
 
 
 def test_update_can_set_and_clear_the_window(client, org_headers):
-    project = _create(client, org_headers, date_ranges=JANUARY).json()
+    project = _create(client, org_headers, phases=one_phase(date_range=JANUARY)).json()
     url = f"/api/v1/projects/{project['id']}"
-    body = {
-        "name": "Apollo",
-        "skill_requirements": [ONE_FTE_NEED],
-        "date_ranges": JANUARY,
-    }
+    body = {"name": "Apollo", "phases": one_phase(date_range=JANUARY)}
 
     set_response = client.put(
         url, json={**body, "start_window": WINDOW}, headers=org_headers

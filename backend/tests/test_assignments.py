@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -23,6 +25,7 @@ def _create_assignment(client, headers, **overrides):
         "ratio": 1.0,
         "start": "2026-01-01",
         "end": "2026-01-31",
+        "phase_id": "main",
         **overrides,
     }
     return client.post("/api/v1/assignments/", json=payload, headers=headers)
@@ -33,7 +36,7 @@ def test_create_and_get_assignment(client, org_headers):
     assert response.status_code == 201
     body = response.json()
     assert body["person_id"] == "person-1"
-    assert body["phase_id"] is None
+    assert body["phase_id"] == "main"
     assert body["organization_id"] == org_headers["X-Organization-Id"]
 
     get_response = client.get(f"/api/v1/assignments/{body['id']}", headers=org_headers)
@@ -119,6 +122,7 @@ def test_update_missing_assignment_returns_404(client, org_headers):
             "ratio": 0.4,
             "start": "2026-01-01",
             "end": "2026-01-31",
+            "phase_id": "main",
         },
         headers=org_headers,
     )
@@ -230,6 +234,7 @@ def test_update_excludes_its_own_assignment_from_fte_check(client, org_headers):
             "ratio": 0.8,
             "start": "2026-01-01",
             "end": "2026-01-31",
+            "phase_id": "main",
         },
         headers=org_headers,
     )
@@ -269,6 +274,7 @@ def test_update_rejects_off_grid_ratio(client, org_headers):
             "ratio": 0.5,
             "start": "2026-01-01",
             "end": "2026-01-31",
+            "phase_id": "main",
         },
         headers=org_headers,
     )
@@ -281,3 +287,30 @@ def test_float_round_off_does_not_block_a_full_allocation(client, org_headers):
     for ratio in (0.2, 0.4, 0.4):
         response = _create_assignment(client, org_headers, ratio=ratio)
         assert response.status_code == 201
+
+
+def test_create_assignment_without_phase_id_is_rejected(client, org_headers):
+    response = _create_assignment(client, org_headers, phase_id=None)
+
+    assert response.status_code == 422
+
+
+def test_legacy_assignment_without_phase_id_loads_in_the_main_phase(
+    client, org_headers, tmp_path
+):
+    legacy = {
+        "id": "legacy-assignment",
+        "organization_id": org_headers["X-Organization-Id"],
+        "person_id": "person-1",
+        "project_id": "project-1",
+        "ratio": 1.0,
+        "start": "2026-01-01",
+        "end": "2026-01-31",
+        "phase_id": None,
+    }
+    (tmp_path / "assignments.json").write_text(json.dumps([legacy]))
+
+    response = client.get("/api/v1/assignments/legacy-assignment", headers=org_headers)
+
+    assert response.status_code == 200
+    assert response.json()["phase_id"] == "main"

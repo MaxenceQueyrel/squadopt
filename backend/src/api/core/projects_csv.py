@@ -5,11 +5,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from api.models.project import Project, ProjectCreate
+from api.models.project import Project, ProjectCreate, legacy_phases
 
 _JSON_FIELDS = (
-    "skill_requirements",
-    "date_ranges",
     "phases",
     "start_window",
 )
@@ -33,11 +31,11 @@ class ProjectCsvRowError(ValueError):
 def encode_projects_csv(projects: list[Project]) -> str:
     """Encodes projects as CSV text.
 
-    Scalar `ProjectBase` fields become plain columns; `skill_requirements`,
-    `date_ranges`, `phases`, and `start_window` are each JSON-encoded into a
-    single cell, so skill requirements carry their `min_level`, `fte` and
-    `max_people`. An open project's `completed_at` is written as an empty
-    cell, and a project without a start window gets `null` in `start_window`.
+    Scalar `ProjectBase` fields become plain columns; `phases` and
+    `start_window` are each JSON-encoded into a single cell, so each phase's
+    skill requirements carry their `min_level`, `fte` and `max_people`. An
+    open project's `completed_at` is written as an empty cell, and a project
+    without a start window gets `null` in `start_window`.
 
     Args:
         projects: Projects to encode.
@@ -70,13 +68,16 @@ def decode_projects_csv(content: str) -> list[tuple[str, ProjectCreate]]:
             exports made before they existed; an empty or missing
             `completed_at` imports as an open project, and an empty, `null` or
             missing `start_window` as a project without a start window.
+            A legacy export's `skill_requirements` and `date_ranges` columns
+            become the phases of a row whose `phases` cell is empty, as
+            `legacy_phases` builds them.
 
     Returns:
         A list of (project id, ProjectCreate) pairs, in row order.
 
     Raises:
         ProjectCsvRowError: If a row is missing a column, has a malformed JSON
-            cell, or fails `ProjectCreate` validation (e.g. a scope without
+            cell, or fails `ProjectCreate` validation (e.g. a phase without
             skill requirements, an off-grid `fte`, bad `DateRange`).
     """
     reader = csv.DictReader(io.StringIO(content))
@@ -90,6 +91,11 @@ def decode_projects_csv(content: str) -> list[tuple[str, ProjectCreate]]:
                 if field not in ("id", "completed_at", "start_window")
             }
             data["start_window"] = json.loads(row.get("start_window") or "null")
+            if not data["phases"] and "skill_requirements" in row:
+                data["phases"] = legacy_phases(
+                    json.loads(row["skill_requirements"]),
+                    json.loads(row.get("date_ranges") or "[]"),
+                )
         except KeyError as exc:
             raise ProjectCsvRowError(row_number, f"missing column {exc}") from exc
         except json.JSONDecodeError as exc:

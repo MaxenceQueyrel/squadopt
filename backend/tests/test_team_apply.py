@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -9,7 +11,7 @@ from api.repositories.file_repository import FileRepository
 from api.v1 import assignments as assignments_module
 from api.v1 import projects as projects_module
 from api.v1 import teams as teams_module
-from tests.conftest import ONE_FTE_NEED, create_org, register_and_login
+from tests.conftest import ONE_FTE_NEED, create_org, one_phase, register_and_login
 
 
 @pytest.fixture
@@ -39,12 +41,7 @@ PHASES = [
 
 
 def _create_project(client, headers, **overrides) -> str:
-    payload = {
-        "name": "Apollo",
-        "skill_requirements": [ONE_FTE_NEED],
-        "phases": PHASES,
-        **overrides,
-    }
+    payload = {"name": "Apollo", "phases": PHASES, **overrides}
     response = client.post("/api/v1/projects/", json=payload, headers=headers)
     assert response.status_code == 201
     return response.json()["id"]
@@ -101,54 +98,49 @@ def test_phased_team_creates_one_assignment_per_member_with_phase_dates(
     assert len(_list_assignments(client, org_headers)) == 2
 
 
-def test_non_phased_team_creates_one_assignment_per_project_date_range(
-    client, org_headers
+def test_legacy_team_applies_to_the_main_phase_of_its_migrated_project(
+    client, org_headers, tmp_path
 ):
-    project_id = _create_project(
-        client,
-        org_headers,
-        phases=[],
-        date_ranges=[
+    organization_id = org_headers["X-Organization-Id"]
+    legacy_project = {
+        "id": "legacy-project",
+        "organization_id": organization_id,
+        "name": "Legacy",
+        "skill_requirements": [ONE_FTE_NEED],
+        "date_ranges": [
             {"start": "2026-01-01", "end": "2026-01-31"},
             {"start": "2026-03-01", "end": "2026-03-31"},
         ],
-    )
-    team_id = _create_team(
-        client,
-        org_headers,
-        project_id,
-        [
-            {"person_id": "alice", "fte_allocation": 0.6},
-            {"person_id": "bob", "fte_allocation": 0.4},
-        ],
-    )
-
-    response = _apply(client, org_headers, team_id)
-
-    assert response.status_code == 201
-    created = response.json()
-    assert len(created) == 4
-    assert {(a["person_id"], a["start"], a["end"]) for a in created} == {
-        ("alice", "2026-01-01", "2026-01-31"),
-        ("alice", "2026-03-01", "2026-03-31"),
-        ("bob", "2026-01-01", "2026-01-31"),
-        ("bob", "2026-03-01", "2026-03-31"),
+        "phases": [],
     }
-    assert all(a["phase_id"] is None for a in created)
+    legacy_team = {
+        "id": "legacy-team",
+        "organization_id": organization_id,
+        "project_id": "legacy-project",
+        "members": [{"person_id": "alice", "fte_allocation": 0.6, "phase_id": None}],
+        "coverage": [
+            {
+                "phase_id": None,
+                "required_fte": 1.0,
+                "staffed_fte": 0.6,
+                "available_fte": 1.0,
+                "fte_met": False,
+                "skills": [],
+            }
+        ],
+    }
+    (tmp_path / "projects.json").write_text(json.dumps([legacy_project]))
+    (tmp_path / "teams.json").write_text(json.dumps([legacy_team]))
 
+    team = client.get("/api/v1/teams/legacy-team", headers=org_headers).json()
+    response = _apply(client, org_headers, "legacy-team")
 
-def test_non_phased_team_on_project_without_date_ranges_returns_400(
-    client, org_headers
-):
-    project_id = _create_project(client, org_headers, phases=[])
-    team_id = _create_team(
-        client, org_headers, project_id, [{"person_id": "alice", "fte_allocation": 1.0}]
-    )
-
-    response = _apply(client, org_headers, team_id)
-
-    assert response.status_code == 400
-    assert _list_assignments(client, org_headers) == []
+    assert [m["phase_id"] for m in team["members"]] == ["main"]
+    assert [c["phase_id"] for c in team["coverage"]] == ["main"]
+    assert response.status_code == 201
+    assert [
+        (a["person_id"], a["phase_id"], a["start"], a["end"]) for a in response.json()
+    ] == [("alice", "main", "2026-01-01", "2026-01-31")]
 
 
 def test_phase_without_date_range_returns_400_and_writes_nothing(client, org_headers):
@@ -181,6 +173,7 @@ def test_member_already_fully_allocated_elsewhere_returns_400_and_writes_nothing
             "ratio": 1.0,
             "start": "2026-01-15",
             "end": "2026-02-15",
+            "phase_id": "main",
         },
         headers=org_headers,
     )
@@ -207,14 +200,27 @@ def test_overlap_among_new_assignments_is_rejected(client, org_headers):
     project_id = _create_project(
         client,
         org_headers,
-        phases=[],
-        date_ranges=[
-            {"start": "2026-01-01", "end": "2026-01-31"},
-            {"start": "2026-01-15", "end": "2026-02-15"},
+        phases=[
+            {
+                "id": "design",
+                "skill_requirements": [ONE_FTE_NEED],
+                "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+            },
+            {
+                "id": "build",
+                "skill_requirements": [ONE_FTE_NEED],
+                "date_range": {"start": "2026-01-15", "end": "2026-02-15"},
+            },
         ],
     )
     team_id = _create_team(
-        client, org_headers, project_id, [{"person_id": "alice", "fte_allocation": 0.6}]
+        client,
+        org_headers,
+        project_id,
+        [
+            {"person_id": "alice", "fte_allocation": 0.6, "phase_id": "design"},
+            {"person_id": "alice", "fte_allocation": 0.6, "phase_id": "build"},
+        ],
     )
 
     response = _apply(client, org_headers, team_id)
@@ -236,17 +242,20 @@ def test_assignments_overlapping_at_different_times_are_not_summed(client, org_h
                 "ratio": 0.4,
                 "start": start,
                 "end": end,
+                "phase_id": "main",
             },
             headers=org_headers,
         )
     project_id = _create_project(
         client,
         org_headers,
-        phases=[],
-        date_ranges=[{"start": "2026-01-05", "end": "2026-01-25"}],
+        phases=one_phase(date_range={"start": "2026-01-05", "end": "2026-01-25"}),
     )
     team_id = _create_team(
-        client, org_headers, project_id, [{"person_id": "alice", "fte_allocation": 0.6}]
+        client,
+        org_headers,
+        project_id,
+        [{"person_id": "alice", "fte_allocation": 0.6, "phase_id": "main"}],
     )
 
     response = _apply(client, org_headers, team_id)
@@ -404,12 +413,7 @@ def _get_project(client, headers, project_id):
 def test_shifted_team_moves_project_dates_and_writes_shifted_assignments(
     client, org_headers
 ):
-    project_id = _create_project(
-        client,
-        org_headers,
-        date_ranges=[{"start": "2026-01-10", "end": "2026-03-31"}],
-        start_window=WINDOW,
-    )
+    project_id = _create_project(client, org_headers, start_window=WINDOW)
     team_id = _create_team(
         client, org_headers, project_id, SHIFTED_TEAM, start_date="2026-01-15"
     )
@@ -422,7 +426,6 @@ def test_shifted_team_moves_project_dates_and_writes_shifted_assignments(
         ("bob", "2026-02-15", "2026-04-14"),
     }
     project = _get_project(client, org_headers, project_id)
-    assert project["date_ranges"] == [{"start": "2026-01-24", "end": "2026-04-14"}]
     stored_need = {**ONE_FTE_NEED, "description": "", "max_people": 1}
     assert project["phases"] == [
         {
@@ -450,6 +453,7 @@ def test_shifted_team_that_over_allocates_writes_nothing(client, org_headers):
             "ratio": 1.0,
             "start": "2026-02-05",
             "end": "2026-02-10",
+            "phase_id": "main",
         },
         headers=org_headers,
     )
@@ -549,6 +553,7 @@ def test_shift_that_over_allocates_a_moved_assignment_writes_nothing(
             "ratio": 1.0,
             "start": "2026-04-05",
             "end": "2026-04-10",
+            "phase_id": "main",
         },
         headers=org_headers,
     )

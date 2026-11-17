@@ -106,3 +106,18 @@ def org_headers(client, manager_headers):
 # A skill need anyone can fill (a missing skill counts as level 0), for tests that
 # need a valid project but don't exercise skills.
 ONE_FTE_NEED = {"id": "general", "min_level": 0, "fte": 1}
+
+
+def one_phase(
+    skill_requirements: list[dict] | None = None, date_range: dict | None = None
+) -> list[dict]:
+    """The `phases` of a one-shot project: a single `main` phase."""
+    return [
+        {
+            "id": "main",
+            "skill_requirements": [ONE_FTE_NEED]
+            if skill_requirements is None
+            else skill_requirements,
+            "date_range": date_range,
+        }
+    ]

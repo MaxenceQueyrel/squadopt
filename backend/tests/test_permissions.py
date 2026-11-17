@@ -16,7 +16,7 @@ from api.v1 import roles as roles_module
 from api.v1 import skills as skills_module
 from api.v1 import teams as teams_module
 from optimizer.models import Seniority
-from tests.conftest import ONE_FTE_NEED
+from tests.conftest import one_phase
 
 
 @pytest.fixture
@@ -133,7 +133,7 @@ def test_project_create_requires_organization_membership(client, org_headers):
     outsider_headers = {"Authorization": org_headers["Authorization"]}
     response = client.post(
         "/api/v1/projects/",
-        json={"name": "Project X", "skill_requirements": [ONE_FTE_NEED]},
+        json={"name": "Project X", "phases": one_phase()},
         headers=outsider_headers,
     )
     assert response.status_code == 422
@@ -142,7 +142,7 @@ def test_project_create_requires_organization_membership(client, org_headers):
 def test_project_create_allowed_for_org_member(client, org_headers):
     response = client.post(
         "/api/v1/projects/",
-        json={"name": "Project X", "skill_requirements": [ONE_FTE_NEED]},
+        json={"name": "Project X", "phases": one_phase()},
         headers=org_headers,
     )
     assert response.status_code == 201
