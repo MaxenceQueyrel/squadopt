@@ -7,7 +7,6 @@ from optimizer.models import (
     ProjectPhase,
     ProjectPriority,
     SkillRequirement,
-    Squad,
 )
 
 MAX_START_CANDIDATES = 52
@@ -19,7 +18,6 @@ class ProjectBase(BaseModel):
     skill_requirements: list[SkillRequirement] = []
     excluded_person_ids: list[str] = []
     included_person_ids: list[str] = []
-    squads: list[Squad] = []
     date_ranges: list[DateRange] = []
     phases: list[ProjectPhase] = []
     priority: ProjectPriority = ProjectPriority.MEDIUM

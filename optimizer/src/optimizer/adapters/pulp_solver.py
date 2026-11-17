@@ -348,17 +348,20 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         couplings: list[Coupling],
         weights: AssignmentWeights,
     ) -> InfeasiblePortfolioError:
-        # Below its need, a phase alone is infeasible only through forced members or the
-        # squads they pull in, which _diagnose attributes. Across phases, the only coupling
-        # is shared capacity, and a forced member needs at least one step per scope (any
-        # selected member can drop to one), so the joint model is infeasible beyond that
-        # exactly when a person is forced into more overlapping scopes than they have steps.
+        # Below its need, a phase alone is infeasible only through forced members, which
+        # _diagnose attributes. Across phases, the only coupling is shared capacity, and a
+        # forced member needs at least one step per scope (any selected member can drop to
+        # one), so the joint model is infeasible beyond that exactly when a person is forced
+        # into more overlapping scopes than they have steps.
         conflicts = [
             self._diagnose(phases, need_per_phase, weights, staff_exactly=False)
             for phases, need_per_phase, _, _ in built
         ]
 
-        forced = [self._forced_members(scoped, candidates) for _, _, (_, scoped, candidates, _, _) in scopes]
+        forced = [
+            {p.id for p in candidates if p.id in scoped.included_person_ids}
+            for _, _, (_, scoped, candidates, _, _) in scopes
+        ]
         reported = set()
         for person_id, period, active, cap in couplings:
             forced_active = [s for s in active if person_id in forced[s]]
@@ -369,17 +372,13 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
             project_ids = list(dict.fromkeys(projects[scopes[s][0]].id for s in forced_active))
             for s in forced_active:
                 i, need, (phase_id, scoped, _, _, _) = scopes[s]
-                directly_forced = person_id in scoped.included_person_ids
                 conflicts[i].append(
                     PhaseConflict(
                         phase_id=phase_id,
                         reason=InfeasibilityReason.CROSS_PROJECT_FORCED_CONFLICT,
                         required_fte=round(sum(req.fte for req in scoped.skill_requirements), 6),
                         need_fte=need / STEPS_PER_FTE,
-                        squad_indices=[]
-                        if directly_forced
-                        else [j for j, squad in enumerate(scoped.squads) if person_id in squad.member_ids],
-                        forced_person_ids=[person_id] if directly_forced else [],
+                        forced_person_ids=[person_id],
                         person_id=person_id,
                         project_ids=project_ids,
                         period=period,
@@ -393,21 +392,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
                 if project_conflicts
             ]
         )
-
-    def _forced_members(self, project: ProjectInput, candidates: list[PersonInput]) -> set[str]:
-        # Squads are co-selected, so every present member of a squad holding a forced
-        # member is forced too; repeated until no squad adds anyone, as squads may chain.
-        candidate_ids = {p.id for p in candidates}
-        forced = {person_id for person_id in project.included_person_ids if person_id in candidate_ids}
-        grew = True
-        while grew:
-            grew = False
-            for squad in project.squads:
-                present = {person_id for person_id in squad.member_ids if person_id in candidate_ids}
-                if present & forced and not present <= forced:
-                    forced |= present
-                    grew = True
-        return forced
 
     def _member(self, phase_id: str | None, person_id: str, days: dict[str, pulp.LpVariable]) -> AssignedMember:
         steps = {skill_id: round(d.value()) for skill_id, d in days.items()}
@@ -440,57 +424,30 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         self, phases: list[Phase], need_per_phase: list[int], weights: AssignmentWeights, staff_exactly: bool
     ) -> list[PhaseConflict]:
         # Phases share no hard constraint (handover is only rewarded), so the joint model
-        # is infeasible exactly when some phase is infeasible on its own. Each cause is
+        # is infeasible exactly when some phase is infeasible on its own. The cause is
         # identified by the relaxation that makes that phase solvable again.
         conflicts = []
         for (phase_id, scoped, candidates, _, _), need in zip(phases, need_per_phase):
             if not candidates or self._is_feasible(scoped, candidates, weights, need, staff_exactly):
                 continue
             candidate_ids = {p.id for p in candidates}
-            squad_indices = [
-                i for i, squad in enumerate(scoped.squads) if len(set(squad.member_ids) & candidate_ids) > 1
-            ]
             forced_ids = [pid for pid in scoped.included_person_ids if pid in candidate_ids]
-
-            causes = []
-            if squad_indices and self._is_feasible(
-                scoped.model_copy(update={"squads": []}), candidates, weights, need, staff_exactly
-            ):
-                # Name the squads whose removal alone suffices; if none does, they conflict jointly.
-                blocking = [
-                    i
-                    for i in squad_indices
-                    if self._is_feasible(
-                        scoped.model_copy(update={"squads": scoped.squads[:i] + scoped.squads[i + 1 :]}),
-                        candidates,
-                        weights,
-                        need,
-                        staff_exactly,
-                    )
-                ]
-                causes.append((InfeasibilityReason.SQUAD_CONFLICT, blocking or squad_indices, []))
             if forced_ids and self._is_feasible(
                 scoped.model_copy(update={"included_person_ids": []}), candidates, weights, need, staff_exactly
             ):
-                causes.append((InfeasibilityReason.FORCED_MEMBER_CONFLICT, [], forced_ids))
-            if not causes and squad_indices and forced_ids:
-                relaxed = scoped.model_copy(update={"squads": [], "included_person_ids": []})
-                if self._is_feasible(relaxed, candidates, weights, need, staff_exactly):
-                    causes.append((InfeasibilityReason.SQUAD_AND_FORCED_MEMBER_CONFLICT, squad_indices, forced_ids))
-            if not causes:
-                causes.append((InfeasibilityReason.FTE_NOT_REACHABLE, [], []))
-
-            conflicts += [
+                reason = InfeasibilityReason.FORCED_MEMBER_CONFLICT
+            else:
+                reason = InfeasibilityReason.FTE_NOT_REACHABLE
+                forced_ids = []
+            conflicts.append(
                 PhaseConflict(
                     phase_id=phase_id,
                     reason=reason,
                     required_fte=round(sum(req.fte for req in scoped.skill_requirements), 6),
                     need_fte=need / STEPS_PER_FTE,
-                    squad_indices=squads,
-                    forced_person_ids=forced,
+                    forced_person_ids=forced_ids,
                 )
-                for reason, squads, forced in causes
-            ]
+            )
         return conflicts
 
     def _is_feasible(
@@ -529,7 +486,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
             skill_requirements=phase.skill_requirements,
             excluded_person_ids=project.excluded_person_ids,
             included_person_ids=project.included_person_ids,
-            squads=project.squads,
             date_ranges=[phase.date_range] if phase.date_range else [],
         )
 
@@ -568,9 +524,9 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
 
     def _staffable_steps(self, project: ProjectInput, candidates: list[PersonInput]) -> int:
         # The need: each skill's FTE capped by what its qualified people can supply, solved
-        # jointly since one person's availability may be claimed by several skills. Squads
-        # and forced members are left out so that a need they can't fit surfaces as an
-        # infeasibility _diagnose can attribute to them.
+        # jointly since one person's availability may be claimed by several skills. Forced
+        # members are left out so that a need they can't fit surfaces as an infeasibility
+        # _diagnose can attribute to them.
         model = pulp.LpProblem("capacity", pulp.LpMaximize)
         days, _ = self._add_allocations(model, "0", project, candidates)
         all_days = [d for person_days in days.values() for d in person_days.values()]
@@ -623,13 +579,6 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         for person_id in project.included_person_ids:
             if person_id in x:
                 model += x[person_id] == 1
-
-        # Squads are co-selected by chaining equalities across members feasible in
-        # this phase; absent members are simply skipped.
-        for squad in project.squads:
-            present = [pid for pid in squad.member_ids if pid in x]
-            for first, second in zip(present, present[1:]):
-                model += x[first] == x[second]
 
         # Weighted by FTE so the score reflects the capacity delivered, not headcount.
         objective_terms = [

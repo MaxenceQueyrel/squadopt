@@ -286,17 +286,13 @@ def test_solve_batch_returns_409_with_cross_project_forced_conflict(
 def test_solve_batch_returns_409_listing_only_the_infeasible_projects(
     client, org_headers
 ):
-    # A 1 FTE need goes to at most one person, so forcing a squad of two into it
-    # can never fit.
-    squad_ids = [_create_person(client, org_headers, n) for n in "XY"]
+    # A 1 FTE need goes to at most one person, so forcing two people into it can
+    # never fit.
+    forced_ids = [_create_person(client, org_headers, n) for n in "XY"]
     _create_person(client, org_headers, "Alice")
     feasible = _create_project(client, org_headers, "A")
     infeasible = _create_project(
-        client,
-        org_headers,
-        "B",
-        squads=[{"member_ids": squad_ids}],
-        included_person_ids=squad_ids[:1],
+        client, org_headers, "B", included_person_ids=forced_ids
     )
 
     response = _solve_batch(client, org_headers, [feasible, infeasible])

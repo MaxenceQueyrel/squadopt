@@ -13,7 +13,6 @@ from optimizer.models import (
     Seniority,
     SkillLevel,
     SkillRequirement,
-    Squad,
 )
 from optimizer.schedule import schedule_anchor, shift_project
 
@@ -163,16 +162,15 @@ def test_equal_scores_pick_the_earliest_start(solver):
     assert scan.best_start == WEEK_1.start
 
 
-def _oversized_squad(prefix, vacation):
-    # A squad of two can't be seated on a 1-FTE need, which seats a single person.
-    members = [_person(f"{prefix}{i}", vacations=[vacation]) for i in range(2)]
-    return Squad(member_ids=[p.id for p in members]), members
+def _forced_pair(prefix, vacations):
+    # Two forced members can't both be seated on a 1-FTE need, which seats a single person.
+    return [_person(f"{prefix}{i}", vacations=vacations) for i in range(2)]
 
 
 def test_infeasible_starts_are_flagged_and_skipped(solver):
-    squad, members = _oversized_squad("m", vacation=WEEK_3)
+    members = _forced_pair("m", vacations=[WEEK_2, WEEK_3])
     solo = _person("solo", vacations=[WEEK_1])
-    project = _project(squads=[squad])
+    project = _project(included_person_ids=[p.id for p in members])
     window = DateRange(start=WEEK_1.start, end=WEEK_3.start)
 
     scan = solver.solve_pool_over_starts(project, members + [solo], AssignmentWeights(), window)
@@ -186,11 +184,9 @@ def test_infeasible_starts_are_flagged_and_skipped(solver):
 
 
 def test_all_infeasible_raises_the_earliest_candidate_conflicts(solver):
-    # Each week a different oversized squad is the only option, so conflicts name a different squad.
-    squad_a, members_a = _oversized_squad("a", vacation=WEEK_2)
-    squad_b, members_b = _oversized_squad("b", vacation=WEEK_1)
-    project = _project(squads=[squad_a, squad_b])
-    people = members_a + members_b
+    # Each week a different forced pair is available, so conflicts name a different pair.
+    people = _forced_pair("a", vacations=[WEEK_2]) + _forced_pair("b", vacations=[WEEK_1])
+    project = _project(included_person_ids=[p.id for p in people])
     window = DateRange(start=WEEK_1.start, end=WEEK_2.start)
 
     with pytest.raises(InfeasibleAssignmentError) as raised:
@@ -198,8 +194,8 @@ def test_all_infeasible_raises_the_earliest_candidate_conflicts(solver):
 
     with pytest.raises(InfeasibleAssignmentError) as at_week_2:
         solver.solve(shift_project(project, timedelta(weeks=1)), people, AssignmentWeights())
-    assert [c.squad_indices for c in raised.value.conflicts] == [[0]]
-    assert [c.squad_indices for c in at_week_2.value.conflicts] == [[1]]
+    assert [c.forced_person_ids for c in raised.value.conflicts] == [["a0", "a1"]]
+    assert [c.forced_person_ids for c in at_week_2.value.conflicts] == [["b0", "b1"]]
 
 
 def test_pool_at_best_start_matches_solve_pool_on_the_shifted_project(solver):

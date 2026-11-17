@@ -11,7 +11,7 @@ import {
 } from "./helpers";
 
 const PROJECT_CSV_HEADER =
-  "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,squads,date_ranges,phases";
+  "id,name,description,priority,skill_requirements,excluded_person_ids,included_person_ids,date_ranges,phases";
 
 const PEOPLE_CSV_HEADER =
   "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities";
@@ -61,20 +61,18 @@ async function importDatedProject(
     skillRequirements = [{ id: "general", min_level: 0, fte: 1 }],
     excludedPersonIds = [],
     includedPersonIds = [],
-    squads = [],
   }: {
     id: string;
     name: string;
     skillRequirements?: { id: string; min_level: number; fte: number; max_people?: number }[];
     excludedPersonIds?: string[];
     includedPersonIds?: string[];
-    squads?: { member_ids: string[] }[];
   },
 ): Promise<void> {
   const dateRanges = [{ start: "2027-01-01", end: "2027-01-31" }];
   const csv = [
     PROJECT_CSV_HEADER,
-    `${id},${name},,high,${quote(skillRequirements)},${quote(excludedPersonIds)},${quote(includedPersonIds)},${quote(squads)},${quote(dateRanges)},[]`,
+    `${id},${name},,high,${quote(skillRequirements)},${quote(excludedPersonIds)},${quote(includedPersonIds)},${quote(dateRanges)},[]`,
   ].join("\n");
   await page.goto("/projects");
   await page.locator('input[type="file"]').setInputFiles({
@@ -328,14 +326,14 @@ test("applying a stale proposal reports the FTE conflict by name", async ({ page
   await expect(page.getByRole("alert")).toContainText(`exceed 1.0 FTE for: ${personName}`);
 });
 
-test("an infeasible squad is explained in the optimization panel", async ({ page }) => {
+test("infeasible forced members are explained in the optimization panel", async ({ page }) => {
   const suffix = uniqueSuffix();
   const projectName = `Optimization Infeasible ${suffix}`;
-  // Every selected person carries at least 0.2 FTE, so six people co-selected as a
-  // squad can never fit a one-FTE project once nobody else can be picked instead.
+  // Every selected person carries at least 0.2 FTE, so six forced members can never fit
+  // a one-FTE project.
   const members = Array.from({ length: 6 }, (_, i) => ({
-    id: `squad-${i + 1}-${suffix}`,
-    name: `Squad Member ${i + 1} ${suffix}`,
+    id: `forced-${i + 1}-${suffix}`,
+    name: `Forced Member ${i + 1} ${suffix}`,
   }));
   const memberIds = members.map((m) => m.id);
   await importPeople(page, members);
@@ -343,7 +341,7 @@ test("an infeasible squad is explained in the optimization panel", async ({ page
     id: `infeasible-${suffix}`,
     name: projectName,
     excludedPersonIds: await everyoneElse(page, memberIds),
-    squads: [{ member_ids: memberIds }],
+    includedPersonIds: memberIds,
   });
 
   await page.getByRole("button", { name: "Optimize staffing" }).click();
@@ -353,10 +351,10 @@ test("an infeasible squad is explained in the optimization panel", async ({ page
   const alert = panel.getByRole("alert");
   await expect(alert).toContainText("No feasible team for these constraints");
   await expect(alert).toContainText(
-    `Squad of Squad Member 1 ${suffix}, Squad Member 2 ${suffix}, Squad Member 3 ${suffix} and 3 more (6 people) must be staffed together at 0.2 FTE or more each, which doesn't fit the 1 FTE the project needs.`,
+    `Forced members Forced Member 1 ${suffix}, Forced Member 2 ${suffix}, Forced Member 3 ${suffix} and 3 more can't all be staffed within the 1 FTE the project needs.`,
   );
   await expect(alert).toContainText(
-    "Drop or shrink the squad, or raise the required FTE or max people.",
+    "Un-force one of them, or raise the required FTE or max people.",
   );
   await expect(alert).not.toContainText("status code 409");
   await expect(page.getByRole("heading", { name: "Optimization result" })).toHaveCount(0);
@@ -494,7 +492,7 @@ test("selected projects are optimized together and applied all at once", async (
     PROJECT_CSV_HEADER,
     ...names.map(
       (name, i) =>
-        `batch-${i}-${suffix},${name},,${i === 0 ? "high" : "low"},${quote(skills)},${quote(excluded)},[],[],${quote(dateRanges)},[]`,
+        `batch-${i}-${suffix},${name},,${i === 0 ? "high" : "low"},${quote(skills)},${quote(excluded)},[],${quote(dateRanges)},[]`,
     ),
   ].join("\n");
   await page.goto("/projects");
