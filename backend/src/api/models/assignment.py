@@ -27,12 +27,6 @@ class AssignmentBase(BaseModel):
             )
         return round(ratio * STEPS_PER_FTE) / STEPS_PER_FTE
 
-    @model_validator(mode="after")
-    def _check_order(self) -> Self:
-        if self.end < self.start:
-            raise ValueError("End date must not be before start date")
-        return self
-
 
 class Assignment(AssignmentBase):
     id: str
@@ -48,5 +42,11 @@ class Assignment(AssignmentBase):
         return {**data, "phase_id": DEFAULT_PHASE_ID}
 
 
+# Only new payloads are checked, so reversed rows stored before this rule still
+# load and can be listed and deleted.
 class AssignmentCreate(AssignmentBase):
-    pass
+    @model_validator(mode="after")
+    def _check_order(self) -> Self:
+        if self.end < self.start:
+            raise ValueError("End date must not be before start date")
+        return self
