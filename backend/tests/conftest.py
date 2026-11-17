@@ -107,9 +107,12 @@ def org_headers(client, manager_headers):
 # need a valid project but don't exercise skills.
 ONE_FTE_NEED = {"id": "general", "min_level": 0, "fte": 1}
 
+# Every phase of a saved project needs dates; tests that don't exercise them use these.
+PHASE_DATES = {"start": "2026-01-05", "end": "2026-01-30"}
+
 
 def one_phase(
-    skill_requirements: list[dict] | None = None, date_range: dict | None = None
+    skill_requirements: list[dict] | None = None, date_range: dict = PHASE_DATES
 ) -> list[dict]:
     """The `phases` of a one-shot project: a single `main` phase."""
     return [
@@ -118,6 +121,6 @@ def one_phase(
             "skill_requirements": [ONE_FTE_NEED]
             if skill_requirements is None
             else skill_requirements,
-            "date_range": date_range,
+            "date_range": dict(date_range),
         }
     ]

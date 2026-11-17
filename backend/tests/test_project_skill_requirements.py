@@ -7,7 +7,7 @@ from api.main import app
 from api.models.project import Project
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
-from tests.conftest import ONE_FTE_NEED, one_phase
+from tests.conftest import ONE_FTE_NEED, PHASE_DATES, one_phase
 
 
 @pytest.fixture
@@ -134,8 +134,8 @@ def test_same_skill_in_different_phases_is_allowed(client, org_headers):
         client,
         org_headers,
         phases=[
-            {"id": "design", "skill_requirements": [REACT]},
-            {"id": "build", "skill_requirements": [REACT]},
+            {"id": "design", "skill_requirements": [REACT], "date_range": PHASE_DATES},
+            {"id": "build", "skill_requirements": [REACT], "date_range": PHASE_DATES},
         ],
     )
 

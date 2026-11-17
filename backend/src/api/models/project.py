@@ -82,10 +82,6 @@ class ProjectBase(BaseModel):
         window = self.start_window
         if window is None:
             return self
-        if window.end < window.start:
-            raise ValueError("Latest start must not be before earliest start")
-        if not any(p.date_range for p in self.phases):
-            raise ValueError("A flexible start needs at least one phase date range")
         if (window.end - window.start).days // 7 + 1 > MAX_START_CANDIDATES:
             raise ValueError(
                 f"A flexible start window can span at most {MAX_START_CANDIDATES} weekly starts"
@@ -113,4 +109,11 @@ class Project(ProjectBase):
 
 
 class ProjectCreate(ProjectBase):
-    pass
+    # Only new payloads must be dated: a stored project without dates still loads,
+    # and applying a team to it fails with a 400 instead.
+    @model_validator(mode="after")
+    def _check_phase_dates(self) -> Self:
+        for phase in self.phases:
+            if phase.date_range is None:
+                raise ValueError(f"Phase '{phase.id}' needs a date range")
+        return self

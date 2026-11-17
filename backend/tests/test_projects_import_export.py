@@ -7,7 +7,7 @@ from api.main import app
 from api.models.project import Project
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
-from tests.conftest import ONE_FTE_NEED, create_org, one_phase
+from tests.conftest import ONE_FTE_NEED, PHASE_DATES, create_org, one_phase
 
 
 @pytest.fixture
@@ -107,7 +107,7 @@ def test_import_creates_new_projects(client, org_headers):
             "skill_requirements": [
                 {**ONE_FTE_NEED, "description": "", "max_people": 1}
             ],
-            "date_range": None,
+            "date_range": PHASE_DATES,
         }
     ]
     assert project["priority"] == "medium"
@@ -281,9 +281,10 @@ def test_import_accepts_legacy_csv_without_completed_at_column(client, org_heade
         "phases",
     ]
     skills_cell = '"[{""id"": ""general"", ""min_level"": 0, ""fte"": 1}]"'
+    dates_cell = '"[{""start"": ""2026-01-05"", ""end"": ""2026-01-30""}]"'
     csv_text = (
         f"{','.join(legacy_fieldnames)}\n"
-        f"proj-1,Nova Redesign,,medium,{skills_cell},[],[]\n"
+        f"proj-1,Nova Redesign,,medium,{skills_cell},{dates_cell},[]\n"
     )
 
     response = _upload_csv(client, org_headers, csv_text)
@@ -292,7 +293,9 @@ def test_import_accepts_legacy_csv_without_completed_at_column(client, org_heade
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert project["completed_at"] is None
     assert project["start_window"] is None
-    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [("main", None)]
+    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [
+        ("main", PHASE_DATES)
+    ]
 
 
 def test_import_turns_legacy_columns_into_one_phase_per_date_range(client, org_headers):
@@ -320,7 +323,10 @@ def test_import_turns_legacy_columns_into_one_phase_per_date_range(client, org_h
 
 
 def test_import_keeps_phases_over_legacy_columns(client, org_headers):
-    phases = [{"id": "build", "skill_requirements": [ONE_FTE_NEED]}]
+    august = {"start": "2026-08-03", "end": "2026-08-28"}
+    phases = [
+        {"id": "build", "skill_requirements": [ONE_FTE_NEED], "date_range": august}
+    ]
     row = _row_values(
         _LEGACY_CSV_FIELDNAMES,
         phases=json.dumps(phases),
@@ -333,7 +339,9 @@ def test_import_keeps_phases_over_legacy_columns(client, org_headers):
 
     assert response.status_code == 200
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
-    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [("build", None)]
+    assert [(p["id"], p["date_range"]) for p in project["phases"]] == [
+        ("build", august)
+    ]
 
 
 def test_import_rejects_invalid_completed_at(client, org_headers):
@@ -378,10 +386,33 @@ def test_import_treats_empty_or_null_start_window_as_none(client, org_headers, c
     assert project["start_window"] is None
 
 
-def test_import_rejects_start_window_on_undated_project(client, org_headers):
-    response = _upload_csv(
-        client, org_headers, _csv_row(start_window=json.dumps(WINDOW))
-    )
+@pytest.mark.parametrize(
+    "fieldnames, overrides",
+    [
+        (
+            _CSV_FIELDNAMES,
+            {
+                "phases": json.dumps(
+                    [{"id": "main", "skill_requirements": [ONE_FTE_NEED]}]
+                )
+            },
+        ),
+        (
+            _LEGACY_CSV_FIELDNAMES,
+            {
+                "phases": "[]",
+                "skill_requirements": json.dumps([ONE_FTE_NEED]),
+                "date_ranges": "[]",
+            },
+        ),
+    ],
+    ids=["undated-phase", "legacy-without-date-ranges"],
+)
+def test_import_rejects_project_without_dates(
+    client, org_headers, fieldnames, overrides
+):
+    row = _row_values(fieldnames, **overrides)
+    response = _upload_csv(client, org_headers, f"{','.join(fieldnames)}\n{row}\n")
 
     assert response.status_code == 400
     assert "Row 2" in response.json()["detail"]

@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 from optimizer.grid import ALLOCATION_STEP, GRID_TOLERANCE, STEPS_PER_FTE, is_on_grid
@@ -42,5 +42,11 @@ class Assignment(AssignmentBase):
         return {**data, "phase_id": DEFAULT_PHASE_ID}
 
 
+# Only new payloads are checked, so reversed rows stored before this rule still
+# load and can be listed and deleted.
 class AssignmentCreate(AssignmentBase):
-    pass
+    @model_validator(mode="after")
+    def _check_order(self) -> Self:
+        if self.end < self.start:
+            raise ValueError("End date must not be before start date")
+        return self

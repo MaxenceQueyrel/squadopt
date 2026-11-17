@@ -155,12 +155,6 @@ test("a flexible start window picks the start where the team is free and applyin
   const personId = `returning-${suffix}`;
   const skillId = `returning-skill-${suffix}`;
 
-  await page.goto("/projects");
-  await page.getByRole("button", { name: "New project" }).click();
-  await expect(page.getByLabel("Earliest start")).toBeDisabled();
-  await expect(page.getByLabel("Latest start")).toBeDisabled();
-  await page.getByRole("button", { name: "Cancel" }).click();
-
   // The only candidate with the skill is away for the planned month, so the first start
   // after the vacation is the only one the team fully covers.
   await importPeople(page, [
@@ -186,7 +180,7 @@ test("a flexible start window picks the start where the team is free and applyin
   await page.getByLabel("Latest start").fill("2027-01-01");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("alert")).toHaveText(
-    "Latest start must not be before earliest start",
+    "Latest start must not be before earliest start.",
   );
   await page.getByLabel("Earliest start").fill("2027-01-01");
   await page.getByLabel("Latest start").fill("2027-02-05");
@@ -414,7 +408,7 @@ test("a user without optimization:run sees no Optimize button", async ({ page })
           {
             id: "main",
             skill_requirements: [{ id: "general", min_level: 0, fte: 1 }],
-            date_range: null,
+            date_range: { start: "2027-01-01", end: "2027-01-31" },
           },
         ],
       },
