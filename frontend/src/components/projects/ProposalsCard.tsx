@@ -4,6 +4,8 @@ import { formatDay } from "@/components/common/dates";
 import { Button, Card, colors, Modal } from "@/components/common/ui";
 import {
   formatFte,
+  formatRawScore,
+  formatScoreShare,
   formatSkillAllocations,
   staffingBaseline,
 } from "@/components/projects/staffing";
@@ -260,10 +262,13 @@ function CompareProposalsModal({
                 Score
               </th>
               {columns.map(({ key, team }) => (
-                <td key={key} className="mono" style={cell}>
-                  {team?.optimization_score != null && team.optimization_max_score != null
-                    ? `${team.optimization_score.toFixed(2)} / ${team.optimization_max_score.toFixed(2)}`
-                    : "—"}
+                <td
+                  key={key}
+                  className="mono"
+                  style={cell}
+                  title={formatRawScore(team?.optimization_score, team?.optimization_max_score)}
+                >
+                  {formatScoreShare(team?.optimization_score, team?.optimization_max_score)}
                 </td>
               ))}
             </tr>

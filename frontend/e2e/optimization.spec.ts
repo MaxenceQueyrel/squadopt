@@ -88,9 +88,9 @@ test("optimizing from the project workspace shows the best team", async ({ page 
     "true",
   );
   await expect(page).toHaveURL(/\?tab=proposals$/);
-  await expect(
-    page.getByRole("region", { name: "Best team" }).getByText("Optimization score:"),
-  ).toBeVisible();
+  const best = page.getByRole("region", { name: "Best team" });
+  await expect(best.getByText("Optimization score:")).toBeVisible();
+  await expect(best.getByText(/^-?\d+% of theoretical max$/)).toBeVisible();
 });
 
 test("the overview's Compare action opens the project's saved proposals", async ({ page }) => {

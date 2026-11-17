@@ -4,6 +4,7 @@ import { daysBetween, formatDay } from "@/components/common/dates";
 import { TeamMembers } from "@/components/common/TeamMembers";
 import { Button, Card, colors, IconButton, Modal } from "@/components/common/ui";
 import { CoverageBreakdown } from "@/components/projects/CoverageBreakdown";
+import { formatRawScore, formatScoreShare } from "@/components/projects/staffing";
 import { errorMessage } from "@/services/api";
 import type { AssignedMember, Person, PhaseCoverage } from "@/types";
 
@@ -124,8 +125,12 @@ export function ProposalCard({
         </div>
         <p style={{ margin: "0.4rem 0 0.75rem", fontSize: "0.875rem", color: colors.muted }}>
           Optimization score:{" "}
-          <strong className="mono" style={{ color: colors.text }}>
-            {score != null && maxScore != null ? `${score.toFixed(2)}/${maxScore.toFixed(2)}` : "—"}
+          <strong
+            className="mono"
+            style={{ color: colors.text }}
+            title={formatRawScore(score, maxScore)}
+          >
+            {formatScoreShare(score, maxScore)}
           </strong>
           {scoreNote && <span style={{ color: colors.muted }}> · {scoreNote}</span>}
         </p>
