@@ -36,7 +36,6 @@ PHASES = [
         "skill_requirements": [ONE_FTE_NEED],
         "date_range": {"start": "2026-02-01", "end": "2026-03-31"},
     },
-    {"id": "undated", "skill_requirements": [ONE_FTE_NEED]},
 ]
 
 
@@ -143,22 +142,29 @@ def test_legacy_team_applies_to_the_main_phase_of_its_migrated_project(
     ] == [("alice", "main", "2026-01-01", "2026-01-31")]
 
 
-def test_phase_without_date_range_returns_400_and_writes_nothing(client, org_headers):
+def test_stored_phase_without_date_range_returns_400_and_writes_nothing(
+    client, org_headers, tmp_path
+):
+    # The API no longer saves undated phases, but projects stored before can have them.
     project_id = _create_project(client, org_headers)
+    projects_file = tmp_path / "projects.json"
+    stored = json.loads(projects_file.read_text())
+    stored[0]["phases"][1]["date_range"] = None
+    projects_file.write_text(json.dumps(stored))
     team_id = _create_team(
         client,
         org_headers,
         project_id,
         [
             {"person_id": "alice", "fte_allocation": 1.0, "phase_id": "design"},
-            {"person_id": "bob", "fte_allocation": 1.0, "phase_id": "undated"},
+            {"person_id": "bob", "fte_allocation": 1.0, "phase_id": "build"},
         ],
     )
 
     response = _apply(client, org_headers, team_id)
 
     assert response.status_code == 400
-    assert "undated" in response.json()["detail"]
+    assert "build" in response.json()["detail"]
     assert _list_assignments(client, org_headers) == []
 
 
@@ -438,7 +444,6 @@ def test_shifted_team_moves_project_dates_and_writes_shifted_assignments(
             "skill_requirements": [stored_need],
             "date_range": {"start": "2026-02-15", "end": "2026-04-14"},
         },
-        {"id": "undated", "skill_requirements": [stored_need], "date_range": None},
     ]
     assert project["start_window"] == WINDOW
 

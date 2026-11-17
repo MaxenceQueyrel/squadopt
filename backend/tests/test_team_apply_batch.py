@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -31,7 +33,6 @@ PHASES = [
         "skill_requirements": [ONE_FTE_NEED],
         "date_range": {"start": "2026-02-01", "end": "2026-03-31"},
     },
-    {"id": "undated", "skill_requirements": [ONE_FTE_NEED]},
 ]
 
 
@@ -175,9 +176,14 @@ def test_apply_batch_counts_kept_assignments_of_other_projects(client, org_heade
     assert _list_assignments(client, org_headers) == [kept]
 
 
-def test_apply_batch_with_a_dateless_team_writes_nothing(client, org_headers):
+def test_apply_batch_with_a_dateless_team_writes_nothing(client, org_headers, tmp_path):
     apollo = _create_project(client, org_headers, "Apollo")
     gemini = _create_project(client, org_headers, "Gemini", phases=PHASES)
+    # The API no longer saves undated phases, but projects stored before can have them.
+    projects_file = tmp_path / "projects.json"
+    stored = json.loads(projects_file.read_text())
+    stored[1]["phases"][1]["date_range"] = None
+    projects_file.write_text(json.dumps(stored))
     apollo_team = _create_team(
         client,
         org_headers,
@@ -188,13 +194,13 @@ def test_apply_batch_with_a_dateless_team_writes_nothing(client, org_headers):
         client,
         org_headers,
         gemini,
-        [{"person_id": "bob", "fte_allocation": 1.0, "phase_id": "undated"}],
+        [{"person_id": "bob", "fte_allocation": 1.0, "phase_id": "build"}],
     )
 
     response = _apply_batch(client, org_headers, [apollo_team, gemini_team])
 
     assert response.status_code == 400
-    assert "undated" in response.json()["detail"]
+    assert "build" in response.json()["detail"]
     assert _list_assignments(client, org_headers) == []
 
 

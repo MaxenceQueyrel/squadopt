@@ -5,7 +5,7 @@ from api.main import app
 from api.models.project import Project
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
-from tests.conftest import ONE_FTE_NEED, one_phase
+from tests.conftest import one_phase
 
 
 @pytest.fixture
@@ -49,26 +49,6 @@ def test_window_defaults_to_none(client, org_headers):
     assert response.json()["start_window"] is None
 
 
-def test_window_needs_only_one_dated_phase(client, org_headers):
-    phases = [
-        {"id": "build", "skill_requirements": [ONE_FTE_NEED], "date_range": JANUARY},
-        {"id": "undated", "skill_requirements": [ONE_FTE_NEED]},
-    ]
-
-    response = _create(client, org_headers, phases=phases, start_window=WINDOW)
-
-    assert response.status_code == 201
-
-
-def test_window_on_undated_project_is_rejected(client, org_headers):
-    response = _create(client, org_headers, start_window=WINDOW)
-
-    assert response.status_code == 422
-    assert "A flexible start needs at least one phase date range" in _error_message(
-        response
-    )
-
-
 def test_window_ending_before_it_starts_is_rejected(client, org_headers):
     response = _create(
         client,
@@ -78,7 +58,7 @@ def test_window_ending_before_it_starts_is_rejected(client, org_headers):
     )
 
     assert response.status_code == 422
-    assert "Latest start must not be before earliest start" in _error_message(response)
+    assert "End date must not be before start date" in _error_message(response)
 
 
 @pytest.mark.parametrize(
@@ -105,7 +85,11 @@ def test_update_validates_the_window(client, org_headers):
 
     response = client.put(
         f"/api/v1/projects/{project['id']}",
-        json={"name": "Apollo", "phases": one_phase(), "start_window": WINDOW},
+        json={
+            "name": "Apollo",
+            "phases": one_phase(),
+            "start_window": {"start": "2026-02-01", "end": "2026-01-31"},
+        },
         headers=org_headers,
     )
 
