@@ -5,10 +5,12 @@ from api.main import app
 from api.models.person import Person
 from api.models.role import Role as RoleCatalogEntry
 from api.models.skill import Skill as SkillCatalogEntry
+from api.models.tag import Tag
 from api.repositories.file_repository import FileRepository
 from api.v1 import people as people_module
 from api.v1 import roles as roles_module
 from api.v1 import skills as skills_module
+from api.v1 import tags as tags_module
 from optimizer.models import Seniority
 from tests.conftest import create_org
 
@@ -21,6 +23,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(
         skills_module, "repo", FileRepository("skills", SkillCatalogEntry)
     )
+    monkeypatch.setattr(tags_module, "repo", FileRepository("tags", Tag))
     return TestClient(app)
 
 
@@ -64,6 +67,7 @@ _CSV_FIELDNAMES = (
     "preferences",
     "growth_targets",
     "affinities",
+    "tags",
 )
 
 
@@ -81,6 +85,7 @@ def _row_values(**overrides):
         "preferences": "[]",
         "growth_targets": "[]",
         "affinities": "{}",
+        "tags": "[]",
         **overrides,
     }
 
@@ -112,6 +117,7 @@ def test_import_creates_new_people(client, org_headers):
         "skipped": [],
         "created_roles": [],
         "created_skills": [],
+        "created_tags": [],
     }
 
     person = client.get("/api/v1/people/p1", headers=org_headers).json()
@@ -262,14 +268,56 @@ def test_import_does_not_recreate_an_existing_skill(client, org_headers):
     assert skill["description"] == "React"
 
 
+def test_import_creates_missing_tags(client, org_headers):
+    client.post("/api/v1/tags/", json={"id": "Contractor"}, headers=org_headers)
+    csv_text = _csv_rows(
+        {"id": "p1", "tags": '["External", "Contractor"]'},
+        {"id": "p2", "tags": '["External"]'},
+    )
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    assert response.json()["created_tags"] == ["External"]
+    tags = {t["id"] for t in client.get("/api/v1/tags/", headers=org_headers).json()}
+    assert tags == {"External", "Contractor"}
+    person = client.get("/api/v1/people/p1", headers=org_headers).json()
+    assert person["tags"] == ["External", "Contractor"]
+
+
+def test_import_accepts_a_csv_without_a_tags_column(client, org_headers):
+    header = ",".join(field for field in _CSV_FIELDNAMES if field != "tags")
+    row = _row_values().rsplit(",", 1)[0]
+
+    response = _upload_csv(client, org_headers, f"{header}\n{row}\n")
+
+    assert response.status_code == 200
+    assert response.json()["created"] == ["p1"]
+    person = client.get("/api/v1/people/p1", headers=org_headers).json()
+    assert person["tags"] == []
+
+
+def test_export_includes_tags(client, org_headers):
+    client.post("/api/v1/tags/", json={"id": "External"}, headers=org_headers)
+    _create_person(client, org_headers, tags=["External"])
+
+    export_response = client.get("/api/v1/people/export", headers=org_headers)
+
+    header, row = export_response.text.splitlines()[:2]
+    assert header.split(",")[-1] == "tags"
+    assert row.endswith('"[""External""]"')
+
+
 def test_export_round_trips_through_import(client, org_headers):
     vacation = {"start": "2026-07-01", "end": "2026-07-15"}
+    client.post("/api/v1/tags/", json={"id": "External"}, headers=org_headers)
     alice = _create_person(
         client,
         org_headers,
         name="Alice Martin",
         working_days_per_week=4,
         vacations=[vacation],
+        tags=["External"],
     )
     carol = _create_person(client, org_headers, name="Carol Diaz", role="Designer")
 
@@ -290,6 +338,7 @@ def test_export_round_trips_through_import(client, org_headers):
     body = response.json()
     assert body["skipped"] == []
     assert set(body["created"]) == {alice["id"], carol["id"]}
+    assert body["created_tags"] == ["External"]
 
     imported_alice = client.get(
         f"/api/v1/people/{alice['id']}", headers=other_org_headers
@@ -298,4 +347,5 @@ def test_export_round_trips_through_import(client, org_headers):
     assert imported_alice["role"] == "Backend Developer"
     assert imported_alice["working_days_per_week"] == 4
     assert imported_alice["vacations"] == [vacation]
+    assert imported_alice["tags"] == ["External"]
     assert imported_alice["base_capacity"] == 0.8

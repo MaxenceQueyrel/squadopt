@@ -14,6 +14,7 @@ _JSON_FIELDS = (
     "preferences",
     "growth_targets",
     "affinities",
+    "tags",
 )
 FIELDNAMES = (
     "id",
@@ -37,8 +38,8 @@ def encode_people_csv(people: list[Person]) -> str:
     """Encodes people as CSV text.
 
     Scalar `PersonBase` fields become plain columns; `skills`, `vacations`,
-    `availability_windows`, `preferences`, `growth_targets`, and `affinities`
-    are each JSON-encoded into a single cell. The derived `base_capacity` is not
+    `availability_windows`, `preferences`, `growth_targets`, `affinities`, and
+    `tags` are each JSON-encoded into a single cell. The derived `base_capacity` is not
     exported, since it is recomputed from `working_days_per_week` on import.
 
     Args:
@@ -67,7 +68,8 @@ def decode_people_csv(content: str) -> list[tuple[str, PersonCreate]]:
     """Decodes CSV text produced by `encode_people_csv` into people.
 
     Args:
-        content: CSV text with the schema written by `encode_people_csv`.
+        content: CSV text with the schema written by `encode_people_csv`. A
+            missing `tags` column decodes as no tags.
 
     Returns:
         A list of (person id, PersonCreate) pairs, in row order.
@@ -80,6 +82,8 @@ def decode_people_csv(content: str) -> list[tuple[str, PersonCreate]]:
     reader = csv.DictReader(io.StringIO(content))
     people: list[tuple[str, PersonCreate]] = []
     for row_number, row in enumerate(reader, start=2):
+        # Exports made before tags existed have no `tags` column.
+        row = {"tags": "[]", **row}
         try:
             person_id = row["id"]
             data: dict[str, Any] = {

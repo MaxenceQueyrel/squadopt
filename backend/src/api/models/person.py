@@ -23,6 +23,7 @@ class PersonBase(BaseModel):
     preferences: list[str] = []
     growth_targets: list[str] = []
     affinities: dict[str, float] = {}  # person_id → score (-5 to +5)
+    tags: list[str] = []
 
 
 class Person(PersonBase):
