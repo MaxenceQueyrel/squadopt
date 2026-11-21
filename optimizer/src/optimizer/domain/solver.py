@@ -169,7 +169,8 @@ class AssignmentSolverPort(ABC):
 
         Args:
             projects: The projects to staff, at the dates they should be solved at.
-            people: Pool of candidate people shared by every project.
+            people: Pool of candidate people shared by every project; a project never
+                staffs the people in its ``excluded_person_ids``.
             weights: Relative weights for performance, chemistry, growth and cost.
 
         Returns:
