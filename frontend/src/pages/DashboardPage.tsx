@@ -239,11 +239,13 @@ export default function DashboardPage() {
     projects,
     teams,
     roles,
+    tags,
     fetchPeople,
     fetchProjects,
     fetchTeams,
     fetchRoles,
     fetchSkills,
+    fetchTags,
     savePerson,
     saveProject,
   } = useAppStore();
@@ -271,11 +273,20 @@ export default function DashboardPage() {
     fetchTeams();
     fetchRoles();
     fetchSkills();
+    fetchTags();
     assignmentsApi
       .list()
       .then(setAssignments)
       .catch((e) => setError(errorMessage(e)));
-  }, [activeOrganizationId, fetchPeople, fetchProjects, fetchTeams, fetchRoles, fetchSkills]);
+  }, [
+    activeOrganizationId,
+    fetchPeople,
+    fetchProjects,
+    fetchTeams,
+    fetchRoles,
+    fetchSkills,
+    fetchTags,
+  ]);
 
   // Re-run whenever the roster is refetched so a newly added person shows up.
   useEffect(() => {
@@ -385,6 +396,7 @@ export default function DashboardPage() {
           person={null}
           people={people}
           roles={roles}
+          tags={tags}
           roleOptions={roleOptions}
           skillOptions={skills}
           onClose={() => setCreating(null)}

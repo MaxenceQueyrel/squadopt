@@ -1,5 +1,5 @@
 import { isAxiosError } from "axios";
-import { ChevronRight, Pencil, Plus } from "lucide-react";
+import { ChevronRight, Pencil, Plus, Tag as TagIcon } from "lucide-react";
 import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useShallow } from "zustand/shallow";
@@ -77,10 +77,12 @@ export default function PersonDetailPage() {
   const {
     people,
     roles,
+    tags,
     projects,
     fetchPeople,
     fetchRoles,
     fetchSkills,
+    fetchTags,
     fetchProjects,
     savePerson,
   } = useAppStore();
@@ -100,8 +102,9 @@ export default function PersonDetailPage() {
     fetchPeople();
     fetchRoles();
     fetchSkills();
+    fetchTags();
     fetchProjects();
-  }, [fetchPeople, fetchRoles, fetchSkills, fetchProjects]);
+  }, [fetchPeople, fetchRoles, fetchSkills, fetchTags, fetchProjects]);
 
   useEffect(() => {
     setPerson(null);
@@ -176,9 +179,21 @@ export default function PersonDetailPage() {
         leading={<Avatar name={person.name} size="lg" />}
         title={person.name}
         subtitle={
-          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.6rem" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "0.6rem",
+            }}
+          >
             <span>{person.role}</span>
             <Pill tone={seniorityTones[person.seniority]}>{seniorityLabels[person.seniority]}</Pill>
+            {person.tags.map((tag) => (
+              <Pill key={tag} icon={TagIcon}>
+                {tag}
+              </Pill>
+            ))}
           </span>
         }
         actions={
@@ -360,6 +375,7 @@ export default function PersonDetailPage() {
           person={person}
           people={people}
           roles={roles}
+          tags={tags}
           roleOptions={roleOptions}
           skillOptions={skillOptions}
           onClose={closeDialog}
