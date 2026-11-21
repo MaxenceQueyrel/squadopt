@@ -214,14 +214,24 @@ test("a person's skills come from the catalog, each picked once", async ({ page 
   await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("combobox", { name: /^Role/ }).selectOption(roleId);
   const addSkillRow = page.getByRole("button").filter({ hasText: "+ Add skill" });
-  const skillRows = page.getByRole("combobox", { name: "Skill", exact: true });
+  const skillRows = page.getByPlaceholder("skill id", { exact: true });
+  const suggestion = (skill: string) => page.getByRole("button", { name: skill, exact: true });
   await addSkillRow.click();
-  await skillRows.last().selectOption(alpha);
+  await skillRows.last().fill(alpha);
+  await suggestion(alpha).click();
   await addSkillRow.click();
-  await expect(skillRows.last().getByRole("option", { name: beta })).toHaveCount(1);
-  await expect(skillRows.last().getByRole("option", { name: alpha })).toHaveCount(0);
-  await expect(skillRows.first().getByRole("option", { name: alpha })).toHaveCount(1);
-  await skillRows.last().selectOption(beta);
+
+  // Text that names no catalog skill doesn't stick to the row.
+  await skillRows.last().fill(`not-in-catalog-${suffix}`);
+  await page.getByTitle("Proficiency level (0–5)").last().click();
+  await expect(skillRows.last()).toHaveValue("");
+
+  // Typing searches the catalog, leaving out the skill another row already has.
+  await skillRows.last().fill(suffix);
+  await expect(suggestion(beta)).toBeVisible();
+  await expect(suggestion(alpha)).toHaveCount(0);
+  await skillRows.last().press("Enter");
+  await expect(skillRows.last()).toHaveValue(beta);
 
   // A typed skill is only kept when it names one from the catalog.
   const preferences = page.getByPlaceholder("search skills, or pick one below").first();

@@ -46,8 +46,46 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
   );
 }
 
-/** A person's skill rows, each picked from the catalog. Skills can't be typed, so a person
- * never gets one the catalog doesn't know; one recorded before that rule stays on its row. */
+// Typed text only filters the catalog; the row takes a skill once it is picked or typed in
+// full, and anything else reverts, so free text never reaches the person.
+function CatalogSkillPicker({
+  id,
+  options,
+  onPick,
+}: {
+  id: string;
+  options: string[];
+  onPick: (id: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const pick = (skill: string) => {
+    onPick(skill);
+    setDraft(null);
+  };
+  const settle = () => {
+    if (draft === null) return;
+    const query = draft.trim().toLowerCase();
+    const match = options.find((o) => o.toLowerCase() === query);
+    if (match) onPick(match);
+    setDraft(null);
+  };
+
+  return (
+    <Combobox
+      placeholder="skill id"
+      value={draft ?? id}
+      onChange={setDraft}
+      options={options}
+      onSelect={pick}
+      onEnter={settle}
+      onBlur={settle}
+      style={{ flex: 1 }}
+    />
+  );
+}
+
+/** A person's skill rows, each searched and picked from the catalog. A skill recorded before
+ * skills had to come from the catalog stays on its row until it is changed. */
 export function SkillsEditor({
   value,
   onChange,
@@ -65,24 +103,13 @@ export function SkillsEditor({
     <div>
       {value.map((s, i) => (
         <div key={i} style={rowStyle}>
-          <select
-            aria-label="Skill"
-            value={s.id}
-            onChange={(e) => update(i, { id: e.target.value })}
-            style={{ ...selectStyle, flex: 1 }}
-          >
-            <option value="">Select a skill</option>
-            {s.id && !skillOptions.includes(s.id) && (
-              <option value={s.id}>{s.id} (not in catalog)</option>
+          <CatalogSkillPicker
+            id={s.id}
+            options={skillOptions.filter(
+              (o) => !value.some((other, idx) => idx !== i && other.id === o),
             )}
-            {skillOptions
-              .filter((o) => o === s.id || !value.some((other) => other.id === o))
-              .map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-          </select>
+            onPick={(id) => update(i, { id })}
+          />
           <input
             type="number"
             min={0}
