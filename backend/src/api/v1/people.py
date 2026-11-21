@@ -74,15 +74,6 @@ def _require_known_role(role: str, organization_id: str) -> None:
         raise HTTPException(status_code=400, detail=f"Unknown role: {role}")
 
 
-def _require_known_tags(tags: list[str], organization_id: str) -> None:
-    known = {tag.id for tag in tags_module.repo.list(organization_id)}
-    unknown = [tag for tag in tags if tag not in known]
-    if unknown:
-        raise HTTPException(
-            status_code=400, detail=f"Unknown tags: {', '.join(unknown)}"
-        )
-
-
 class ImportSummary(BaseModel):
     created: list[str]
     skipped: list[str]
@@ -183,7 +174,7 @@ def create_person(
     data: PersonCreate, organization_id: str = Depends(require_org_member)
 ):
     _require_known_role(data.role, organization_id)
-    _require_known_tags(data.tags, organization_id)
+    tags_module.require_known_tags(data.tags, organization_id)
     return repo.create(data.model_dump(), organization_id)
 
 
@@ -194,7 +185,7 @@ def update_person(
     organization_id: str = Depends(require_org_member),
 ):
     _require_known_role(data.role, organization_id)
-    _require_known_tags(data.tags, organization_id)
+    tags_module.require_known_tags(data.tags, organization_id)
     person = repo.update(person_id, data.model_dump(), organization_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")

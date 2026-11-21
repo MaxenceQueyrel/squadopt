@@ -122,7 +122,7 @@ backend/
 | GET/PUT/DELETE | `/api/v1/projects/{id}` | Read / update / delete a project |
 | GET/POST/PUT/DELETE | `/api/v1/skills` | Manage skills |
 | GET/POST/PUT/DELETE | `/api/v1/roles` | Manage roles |
-| GET/POST/PUT/DELETE | `/api/v1/tags` | Manage person tags (deleting one removes it from every person) |
+| GET/POST/PUT/DELETE | `/api/v1/tags` | Manage person tags (deleting one removes it from every person and project exclusion) |
 | GET/POST | `/api/v1/teams` | List / create teams |
 | POST | `/api/v1/teams/{id}/apply` | Replace the project's staffing with a team's assignments |
 | POST | `/api/v1/optimization/solve` | Run the assignment solver |
