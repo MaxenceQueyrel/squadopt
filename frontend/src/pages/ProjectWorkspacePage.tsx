@@ -8,6 +8,7 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Trash2,
+  UserX,
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -81,8 +82,10 @@ export default function ProjectWorkspacePage() {
   const {
     people,
     teams,
+    tags,
     fetchPeople,
     fetchSkills,
+    fetchTags,
     fetchProjects,
     fetchTeams,
     saveProject,
@@ -118,9 +121,10 @@ export default function ProjectWorkspacePage() {
   useEffect(() => {
     fetchPeople();
     fetchSkills();
+    fetchTags();
     fetchProjects();
     fetchTeams();
-  }, [fetchPeople, fetchSkills, fetchProjects, fetchTeams]);
+  }, [fetchPeople, fetchSkills, fetchTags, fetchProjects, fetchTeams]);
 
   useEffect(() => {
     setProject(null);
@@ -252,6 +256,11 @@ export default function ProjectWorkspacePage() {
             <Pill tone={projectStatusTones[status]} dot>
               {projectStatusLabels[status]}
             </Pill>
+            {project.excluded_tags.length > 0 && (
+              <Pill tone="outline" icon={UserX}>
+                Excludes: {project.excluded_tags.join(", ")}
+              </Pill>
+            )}
           </>
         }
         subtitle={project.description || undefined}
@@ -345,6 +354,7 @@ export default function ProjectWorkspacePage() {
               lane={lane}
               title={lanes.length > 1 ? lane.label : "Staffing"}
               people={people}
+              excludedTags={project.excluded_tags}
               today={today}
               onAssign={async (data) => {
                 const created = await assignmentsApi.create({ ...data, project_id: project.id });
@@ -560,6 +570,7 @@ export default function ProjectWorkspacePage() {
         <ProjectForm
           project={project}
           skillOptions={skillOptions}
+          tags={tags}
           onClose={() => setEditing(false)}
           onSave={async (draft) => {
             await saveProject(draft, project.id);

@@ -1,4 +1,4 @@
-import { CircleCheck, Plus, Sparkles, UserPlus, X } from "lucide-react";
+import { CircleCheck, Plus, Sparkles, TriangleAlert, UserPlus, X } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { formatSpan } from "@/components/common/dates";
@@ -20,6 +20,7 @@ import { SkillMatch } from "@/components/projects/SkillMatch";
 import {
   assignedFte,
   averageFreeFte,
+  excludingTags,
   formatFte,
   fteByPerson,
   missingSkills,
@@ -65,11 +66,13 @@ function joinRequirements(requirements: SkillRequirement[]): string {
 }
 
 /** One phase (or the whole project): FTE headline, a per-person stacked bar, the skill
- * requirements, the roster with each member's requirement matches, and the open slot. */
+ * requirements, the roster with each member's requirement matches, and the open slot.
+ * Members assigned before the project excluded one of their tags stay on the roster, flagged. */
 export function StaffingLaneCard({
   lane,
   title,
   people,
+  excludedTags,
   today,
   onAssign,
   onRemove,
@@ -78,6 +81,7 @@ export function StaffingLaneCard({
   lane: StaffingLane;
   title: string;
   people: Person[];
+  excludedTags: string[];
   today: string;
   onAssign: (data: Omit<Assignment, "id" | "project_id">) => Promise<void>;
   onRemove: (assignmentId: string) => Promise<void>;
@@ -193,6 +197,7 @@ export function StaffingLaneCard({
             {roster.map((assignment) => {
               const person = peopleById.get(assignment.person_id);
               const name = nameOf(assignment.person_id);
+              const excludedBy = person ? excludingTags(excludedTags, person) : [];
               const details = [
                 person?.role,
                 person && seniorityLabels[person.seniority],
@@ -212,6 +217,11 @@ export function StaffingLaneCard({
                       <div style={{ fontSize: "0.85rem", color: colors.muted }}>
                         {details.join(" · ")}
                       </div>
+                    )}
+                    {excludedBy.length > 0 && (
+                      <Pill tone="warning" icon={TriangleAlert} style={{ marginTop: "0.3rem" }}>
+                        Excluded by tag: {excludedBy.join(", ")}
+                      </Pill>
                     )}
                   </div>
                   {person && lane.skillRequirements.length > 0 && (
@@ -321,6 +331,7 @@ export function StaffingLaneCard({
             <AssignForm
               lane={lane}
               people={people}
+              excludedTags={excludedTags}
               onCancel={() => {
                 setAssigning(false);
                 setError(null);
@@ -356,16 +367,19 @@ export function StaffingLaneCard({
   );
 }
 
-/** Inline form to assign a person to `lane`; `defaultPersonId` preselects the person. */
+/** Inline form to assign a person to `lane`; `defaultPersonId` preselects the person. People
+ * carrying one of the project's `excludedTags` are hidden from the picker. */
 export function AssignForm({
   lane,
   people,
+  excludedTags,
   defaultPersonId = "",
   onCancel,
   onSubmit,
 }: {
   lane: StaffingLane;
   people: Person[];
+  excludedTags: string[];
   defaultPersonId?: string;
   onCancel: () => void;
   onSubmit: (data: Omit<Assignment, "id" | "project_id">) => Promise<void>;
@@ -437,6 +451,7 @@ export function AssignForm({
           <PersonPicker
             id={personFieldId}
             people={people}
+            excludedTags={excludedTags}
             value={personId}
             onChange={setPersonId}
             requirements={lane.skillRequirements}

@@ -2,12 +2,18 @@ import { useState } from "react";
 import { isoToday } from "@/components/common/dates";
 import { colors, Field, Modal, selectStyle } from "@/components/common/ui";
 import { AssignForm } from "@/components/projects/StaffingLaneCard";
-import { buildLanes, formatFte, isOpenForStaffing } from "@/components/projects/staffing";
+import {
+  buildLanes,
+  excludingTags,
+  formatFte,
+  isOpenForStaffing,
+} from "@/components/projects/staffing";
 import { assignmentsApi, errorMessage } from "@/services/api";
 import type { Assignment, Person, Project } from "@/types";
 
 /** Picks an open project (and phase, for phased projects), then assigns `person` to it with the
- * same form the project workspace uses. */
+ * same form the project workspace uses. Projects excluding one of the person's tags are listed
+ * but disabled, with the tags as the reason. */
 export function AssignToProjectModal({
   person,
   projects,
@@ -44,11 +50,14 @@ export function AssignToProjectModal({
           style={selectStyle}
         >
           <option value="">Select a project</option>
-          {openProjects.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
+          {openProjects.map((p) => {
+            const excludedBy = excludingTags(p.excluded_tags, person);
+            return (
+              <option key={p.id} value={p.id} disabled={excludedBy.length > 0}>
+                {excludedBy.length > 0 ? `${p.name} (excludes ${excludedBy.join(", ")})` : p.name}
+              </option>
+            );
+          })}
         </select>
       </Field>
 
@@ -76,6 +85,7 @@ export function AssignToProjectModal({
             key={`${project.id}-${lane.key}`}
             lane={lane}
             people={[person]}
+            excludedTags={project.excluded_tags}
             defaultPersonId={person.id}
             onCancel={onClose}
             onSubmit={async (data) => {

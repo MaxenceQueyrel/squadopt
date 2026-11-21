@@ -191,7 +191,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ error: null });
     try {
       const summary = await projectsApi.importCsv(file);
-      await get().fetchProjects();
+      await Promise.all([get().fetchProjects(), get().fetchTags()]);
       return summary;
     } catch (e) {
       set({ error: message(e) });

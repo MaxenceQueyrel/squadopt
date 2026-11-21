@@ -410,6 +410,7 @@ export default function DashboardPage() {
         <ProjectForm
           project={null}
           skillOptions={skills}
+          tags={tags}
           onClose={() => setCreating(null)}
           onSave={async (draft) => {
             await saveProject(draft);

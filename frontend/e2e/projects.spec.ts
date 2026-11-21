@@ -824,3 +824,74 @@ test("project list filters and sort survive a reload", async ({ page }) => {
   ]);
   await expect(page).toHaveURL(new RegExp(`\\?q=${suffix}$`));
 });
+
+test("a project excluding a tag hides tagged people from both pickers and flags its members", async ({
+  page,
+}) => {
+  const suffix = uniqueSuffix();
+  const tagId = `External-${suffix}`;
+  const personName = `Contractor ${suffix}`;
+  const projectName = `Insiders Only ${suffix}`;
+
+  const roleId = `contractor-${suffix}`;
+
+  await page.goto("/people");
+  await page.getByRole("button", { name: "Add role", exact: true }).click();
+  await page.getByLabel("Role id").fill(roleId);
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Add tag", exact: true }).click();
+  await page.getByLabel("Tag id").fill(tagId);
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Add person", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill(personName);
+  await page.getByRole("combobox", { name: /^Role/ }).selectOption(roleId);
+  await page.getByRole("group", { name: "Tags" }).getByRole("checkbox", { name: tagId }).check();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("row", { name: personName }).getByText(tagId)).toBeVisible();
+
+  // Staffed before the exclusion, so the assignment is kept and flagged rather than removed.
+  await createProject(page, projectName);
+  await page.getByRole("link", { name: projectName }).click();
+  const lane = page.getByRole("region", { name: "Staffing" });
+  await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
+  await pickPerson(lane, personName);
+  await lane.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(lane.getByRole("link", { name: personName })).toBeVisible();
+  await expect(lane.getByText(/^Excluded by tag/)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByRole("group", { name: "Exclude people tagged" })
+    .getByRole("checkbox", { name: tagId })
+    .check();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(`Excludes: ${tagId}`)).toBeVisible();
+  await expect(lane.getByRole("listitem").filter({ hasText: personName })).toContainText(
+    `Excluded by tag: ${tagId}`,
+  );
+
+  await lane.getByRole("button", { name: "Assign person to Whole project" }).click();
+  await lane.getByLabel("Person", { exact: true }).fill(personName);
+  await expect(lane.getByRole("option", { name: new RegExp(personName) })).toHaveCount(0);
+  await expect(lane.getByText(`1 person hidden — excluded by tag: ${tagId}`)).toBeVisible();
+
+  await lane.getByRole("link", { name: personName }).click();
+  await page.getByRole("button", { name: "Assign to project" }).first().click();
+  const option = page
+    .getByRole("combobox", { name: "Project", exact: true })
+    .locator("option", { hasText: projectName });
+  await expect(option).toHaveText(`${projectName} (excludes ${tagId})`);
+  await expect(option).toHaveJSProperty("disabled", true);
+
+  // Clearing the exclusion makes the project pickable again.
+  await page.goto("/projects");
+  await page.getByRole("link", { name: projectName }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page
+    .getByRole("group", { name: "Exclude people tagged" })
+    .getByRole("checkbox", { name: tagId })
+    .uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(`Excludes: ${tagId}`)).toHaveCount(0);
+  await expect(page.getByText(`Excluded by tag: ${tagId}`)).toHaveCount(0);
+});
