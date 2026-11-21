@@ -247,8 +247,10 @@ class PuLPTeamAssignmentSolver(AssignmentSolverPort):
         headcount = []
         phases: list[Phase] = []
         need_per_phase = []
+        excluded = set(project.excluded_person_ids)
+        eligible = [p for p in people if p.id not in excluded]
         for k, phase in enumerate(project.phases):
-            candidates = feasible_people(phase, people)
+            candidates = feasible_people(phase, eligible)
             if not candidates:
                 phases.append((phase, [], {}, {}))
                 need_per_phase.append(0)

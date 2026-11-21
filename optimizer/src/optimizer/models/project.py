@@ -19,3 +19,7 @@ class ProjectInput(BaseModel):
     phases: list[ProjectPhase] = Field(
         min_length=1, description="Staffing needs of the project, one entry per stage, in schedule order."
     )
+    excluded_person_ids: list[str] = Field(
+        default=[],
+        description="People who must never be staffed on any phase of this project, by person id.",
+    )
