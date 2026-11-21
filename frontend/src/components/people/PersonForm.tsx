@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { Button, colors, Field, inputStyle, Modal, selectStyle } from "@/components/common/ui";
-import { AffinitiesEditor, SkillsEditor, TagSkillInput } from "@/components/editors/listEditors";
-import type { Person, PersonInput, Role, Seniority } from "@/types";
+import {
+  AffinitiesEditor,
+  SkillsEditor,
+  TagPicker,
+  TagSkillInput,
+} from "@/components/editors/listEditors";
+import type { Person, PersonInput, Role, Seniority, Tag } from "@/types";
 
 const SENIORITIES: Seniority[] = ["junior", "mid", "senior", "lead"];
 const WORKING_DAYS = [1, 2, 3, 4, 5, 6, 7];
@@ -25,6 +30,7 @@ function emptyDraft(): PersonDraft {
     preferences: [],
     growth_targets: [],
     affinities: {},
+    tags: [],
   };
 }
 
@@ -33,6 +39,7 @@ export function PersonForm({
   person,
   people,
   roles,
+  tags,
   roleOptions,
   skillOptions,
   onClose,
@@ -41,6 +48,7 @@ export function PersonForm({
   person: Person | null;
   people: Person[];
   roles: Role[];
+  tags: Tag[];
   roleOptions: string[];
   skillOptions: string[];
   onClose: () => void;
@@ -152,6 +160,14 @@ export function PersonForm({
           ))}
         </select>
       </Field>
+
+      <TagPicker
+        label="Tags"
+        hint="Projects can exclude everyone carrying a tag."
+        value={draft.tags}
+        onChange={(v) => set("tags", v)}
+        tags={tags}
+      />
 
       <Field label="Skills" hint="Add skill ids from the catalog above.">
         <SkillsEditor

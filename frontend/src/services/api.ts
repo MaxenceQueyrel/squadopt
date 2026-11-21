@@ -20,6 +20,7 @@ import type {
   ProjectsImportSummary,
   Role,
   Skill,
+  Tag,
   Team,
   TeamProposal,
   User,
@@ -49,7 +50,7 @@ export function setOnAuthFailure(handler: (() => void) | null): void {
   onAuthFailure = handler;
 }
 
-// Scopes people/roles/skills/projects/assignments/teams/optimization requests to the
+// Scopes people/roles/skills/tags/projects/assignments/teams/optimization requests to the
 // active organization; auth and organizations endpoints ignore this header.
 let activeOrganizationId: string | null = null;
 
@@ -253,6 +254,16 @@ export const skillsApi = {
   update: (id: string, data: Skill) =>
     client.put<Skill>(`/api/v1/skills/${id}`, data).then((r) => r.data),
   delete: (id: string) => client.delete(`/api/v1/skills/${id}`),
+};
+
+type TagPayload = Omit<Tag, "organization_id">;
+
+export const tagsApi = {
+  list: () => client.get<Tag[]>("/api/v1/tags/").then((r) => r.data),
+  create: (data: TagPayload) => client.post<Tag>("/api/v1/tags/", data).then((r) => r.data),
+  update: (id: string, data: TagPayload) =>
+    client.put<Tag>(`/api/v1/tags/${id}`, data).then((r) => r.data),
+  delete: (id: string) => client.delete(`/api/v1/tags/${id}`),
 };
 
 export const optimizationApi = {

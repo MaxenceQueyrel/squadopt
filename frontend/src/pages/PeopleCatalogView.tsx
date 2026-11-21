@@ -1,9 +1,14 @@
 import { CircleAlert, Pencil, Plus, Trash } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, colors, Menu, type MenuItem, SearchInput } from "@/components/common/ui";
-import { type CatalogItem, type CatalogKind, CatalogModal } from "@/components/people/CatalogModal";
+import {
+  type CatalogItem,
+  type CatalogKind,
+  CatalogModal,
+  catalogNouns,
+} from "@/components/people/CatalogModal";
 import { formatHeadcount } from "@/components/projects/staffing";
-import { errorMessage, rolesApi, skillsApi } from "@/services/api";
+import { errorMessage, rolesApi, skillsApi, tagsApi } from "@/services/api";
 import { useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 
@@ -22,41 +27,73 @@ const bodyCell = {
   verticalAlign: "top",
 } as const;
 
-/** The "Roles & skills" tab: the full role and skill catalogs with their descriptions. */
+const catalogApis = { role: rolesApi, skill: skillsApi, tag: tagsApi };
+
+/** The catalog tab: the full role, skill and tag catalogs with their descriptions. */
 export default function PeopleCatalogView() {
-  const { people, roles, skills, createRole, createSkill, fetchRoles, fetchSkills } = useAppStore();
+  const {
+    people,
+    roles,
+    skills,
+    tags,
+    createRole,
+    createSkill,
+    createTag,
+    fetchPeople,
+    fetchRoles,
+    fetchSkills,
+    fetchTags,
+  } = useAppStore();
   const canWriteRoles = useAuthStore((s) => s.permissions.has("roles:write"));
   const canDeleteRoles = useAuthStore((s) => s.permissions.has("roles:delete"));
   const canWriteSkills = useAuthStore((s) => s.permissions.has("skills:write"));
   const canDeleteSkills = useAuthStore((s) => s.permissions.has("skills:delete"));
+  // Tags have no permission codes of their own: they are part of a person's profile.
+  const canWriteTags = useAuthStore((s) => s.permissions.has("people:write"));
   const [editing, setEditing] = useState<{ kind: CatalogKind; item?: CatalogItem } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const catalogs = {
+    role: { items: roles, create: createRole, fetch: fetchRoles },
+    skill: { items: skills, create: createSkill, fetch: fetchSkills },
+    tag: { items: tags, create: createTag, fetch: fetchTags },
+  };
 
   const save = async (
     { kind, item }: { kind: CatalogKind; item?: CatalogItem },
     data: { id: string; description: string },
   ) => {
     if (item) {
-      await (kind === "role" ? rolesApi : skillsApi).update(item.id, data);
-      await (kind === "role" ? fetchRoles() : fetchSkills());
-    } else if (kind === "role") {
-      await createRole(data);
+      await catalogApis[kind].update(item.id, data);
+      await catalogs[kind].fetch();
     } else {
-      await createSkill(data);
+      await catalogs[kind].create(data);
     }
     setEditing(null);
   };
 
-  const remove = async (kind: CatalogKind, id: string, usedBy: number) => {
-    const inUse = usedBy > 0 ? ` It is still set on ${formatHeadcount(usedBy)}.` : "";
-    if (!confirm(`Delete ${kind} ${id}?${inUse}`)) return;
+  const remove = async (kind: CatalogKind, id: string, warning: string) => {
+    if (!confirm(`Delete ${kind} ${id}?${warning}`)) return;
     setError(null);
     try {
-      await (kind === "role" ? rolesApi : skillsApi).delete(id);
-      await (kind === "role" ? fetchRoles() : fetchSkills());
+      await catalogApis[kind].delete(id);
+      await catalogs[kind].fetch();
+      // The backend strips a deleted tag from every person who carried it.
+      if (kind === "tag") await fetchPeople();
     } catch (e) {
       setError(errorMessage(e));
     }
+  };
+
+  const stillSetOn = (usedBy: number) =>
+    usedBy > 0 ? ` It is still set on ${formatHeadcount(usedBy)}.` : "";
+
+  // Deleting a tag removes it from everything that carries it, so the prompt names all of it.
+  const tagRemovalWarning = (id: string) => {
+    const usages: string[] = [];
+    const holders = people.filter((p) => p.tags.includes(id)).length;
+    if (holders > 0) usages.push(formatHeadcount(holders));
+    return usages.length > 0 ? ` It will be removed from ${usages.join(" and ")}.` : "";
   };
 
   return (
@@ -98,7 +135,7 @@ export default function PeopleCatalogView() {
           canDelete={canDeleteRoles}
           onAdd={() => setEditing({ kind: "role" })}
           onEdit={(item) => setEditing({ kind: "role", item })}
-          onDelete={(id, usedBy) => remove("role", id, usedBy)}
+          onDelete={(id, usedBy) => remove("role", id, stillSetOn(usedBy))}
         />
         <CatalogSection
           kind="skill"
@@ -110,14 +147,26 @@ export default function PeopleCatalogView() {
           canDelete={canDeleteSkills}
           onAdd={() => setEditing({ kind: "skill" })}
           onEdit={(item) => setEditing({ kind: "skill", item })}
-          onDelete={(id, usedBy) => remove("skill", id, usedBy)}
+          onDelete={(id, usedBy) => remove("skill", id, stillSetOn(usedBy))}
+        />
+        <CatalogSection
+          kind="tag"
+          title="Tags"
+          subtitle="Labels for groups of people, such as External, that projects can exclude."
+          items={tags}
+          usage={(id) => people.filter((p) => p.tags.includes(id)).length}
+          canWrite={canWriteTags}
+          canDelete={canWriteTags}
+          onAdd={() => setEditing({ kind: "tag" })}
+          onEdit={(item) => setEditing({ kind: "tag", item })}
+          onDelete={(id) => remove("tag", id, tagRemovalWarning(id))}
         />
       </div>
 
       {editing && (
         <CatalogModal
           kind={editing.kind}
-          items={editing.kind === "role" ? roles : skills}
+          items={catalogs[editing.kind].items}
           item={editing.item}
           onClose={() => setEditing(null)}
           onSave={(data) => save(editing, data)}
@@ -150,7 +199,7 @@ function CatalogSection({
   onEdit: (item: CatalogItem) => void;
   onDelete: (id: string, usedBy: number) => void;
 }) {
-  const noun = kind === "role" ? "Role" : "Skill";
+  const noun = catalogNouns[kind];
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const visible = needle

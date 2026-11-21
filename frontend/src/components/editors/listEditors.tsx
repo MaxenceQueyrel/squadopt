@@ -9,6 +9,7 @@ import type {
   ProjectPhase,
   SkillLevel,
   SkillRequirement,
+  Tag,
 } from "@/types";
 
 const rowStyle = {
@@ -416,6 +417,75 @@ export function TagSkillInput({
         emptyLabel="No matching skill — press Enter to add it as typed"
       />
     </div>
+  );
+}
+
+/** A field of checkbox chips picking tags from the catalog. Tags can't be typed, so a typo
+ * never reaches a person or project. */
+export function TagPicker({
+  label,
+  hint,
+  value,
+  onChange,
+  tags,
+}: {
+  label: string;
+  hint?: string;
+  value: string[];
+  onChange: (v: string[]) => void;
+  tags: Tag[];
+}) {
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((t) => t !== id) : [...value, id]);
+
+  // A fieldset rather than Field: inside Field's <label>, clicking the hint would toggle the
+  // first chip.
+  return (
+    <fieldset style={{ border: "none", margin: "0 0 0.85rem", padding: 0, minWidth: 0 }}>
+      <legend style={{ padding: 0, marginBottom: 5, fontSize: "0.82rem", fontWeight: 600 }}>
+        {label}
+      </legend>
+      {hint && (
+        <div style={{ fontSize: "0.78rem", color: colors.muted, marginBottom: 5 }}>{hint}</div>
+      )}
+      {tags.length === 0 ? (
+        <div style={{ fontSize: "0.8rem", color: colors.muted }}>
+          No tags yet. Add them from the Tags card on the People page.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+          {tags.map((tag) => {
+            const checked = value.includes(tag.id);
+            return (
+              <label
+                key={tag.id}
+                title={tag.description || undefined}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "0.2rem 0.65rem",
+                  borderRadius: 999,
+                  border: `1px solid ${checked ? colors.primary : colors.borderStrong}`,
+                  background: checked ? colors.primaryBg : colors.surface,
+                  color: checked ? colors.primary : colors.text,
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(tag.id)}
+                  style={{ accentColor: "var(--color-primary)", margin: 0 }}
+                />
+                {tag.id}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </fieldset>
   );
 }
 

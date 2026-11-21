@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash } from "lucide-react";
+import { Pencil, Plus, Tag as TagIcon, Trash } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import { useShallow } from "zustand/shallow";
@@ -82,8 +82,18 @@ const bodyCell = {
 } as const;
 
 export default function PeoplePage() {
-  const { people, projects, roles, skills, isLoading, deletePerson, createRole, createSkill } =
-    useAppStore();
+  const {
+    people,
+    projects,
+    roles,
+    skills,
+    tags,
+    isLoading,
+    deletePerson,
+    createRole,
+    createSkill,
+    createTag,
+  } = useAppStore();
   const roleOptions = useAppStore(useShallow(knownRoleIds));
   const skillOptions = useAppStore(useShallow(knownSkillIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
@@ -131,6 +141,14 @@ export default function PeoplePage() {
       holders: people.filter((p) => p.skills.some((s) => s.id === id)).map((p) => p.name),
     }))
     .sort((a, b) => b.holders.length - a.holders.length || a.id.localeCompare(b.id));
+  const tagCounts = tags
+    .map(({ id }) => ({ id, count: people.filter((p) => p.tags.includes(id)).length }))
+    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+  const catalogs = {
+    role: { items: roles, create: createRole },
+    skill: { items: skills, create: createSkill },
+    tag: { items: tags, create: createTag },
+  };
 
   const projectName = (projectId: string) =>
     projects.find((p) => p.id === projectId)?.name ?? projectId;
@@ -248,6 +266,22 @@ export default function PeoplePage() {
                             {p.name}
                           </Link>
                           <div style={{ color: colors.muted, fontSize: "0.85rem" }}>{p.role}</div>
+                          {p.tags.length > 0 && (
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "0.25rem",
+                                marginTop: "0.3rem",
+                              }}
+                            >
+                              {p.tags.map((tag) => (
+                                <Pill key={tag} icon={TagIcon}>
+                                  {tag}
+                                </Pill>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -412,19 +446,36 @@ export default function PeoplePage() {
             </SummaryRow>
           )}
         />
+        <SummaryCard
+          title="Tags"
+          subtitle="Groups of people, such as External, that projects can exclude"
+          action={
+            canWritePeople && (
+              <Button icon={Plus} ariaLabel="Add tag" onClick={() => setCatalogKind("tag")}>
+                Tag
+              </Button>
+            )
+          }
+          kind="tag"
+          items={tagCounts}
+          renderRow={({ id, count }) => (
+            <SummaryRow key={id}>
+              <span style={{ flex: 1 }}>{id}</span>
+              <span style={{ color: colors.muted, fontSize: "0.85rem" }}>
+                {formatHeadcount(count)}
+              </span>
+            </SummaryRow>
+          )}
+        />
       </div>
 
       {catalogKind && (
         <CatalogModal
           kind={catalogKind}
-          items={catalogKind === "role" ? roles : skills}
+          items={catalogs[catalogKind].items}
           onClose={() => setCatalogKind(null)}
           onSave={async (data) => {
-            if (catalogKind === "role") {
-              await createRole(data);
-            } else {
-              await createSkill(data);
-            }
+            await catalogs[catalogKind].create(data);
             setCatalogKind(null);
           }}
         />
