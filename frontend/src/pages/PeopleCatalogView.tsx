@@ -33,6 +33,7 @@ const catalogApis = { role: rolesApi, skill: skillsApi, tag: tagsApi };
 export default function PeopleCatalogView() {
   const {
     people,
+    projects,
     roles,
     skills,
     tags,
@@ -40,6 +41,7 @@ export default function PeopleCatalogView() {
     createSkill,
     createTag,
     fetchPeople,
+    fetchProjects,
     fetchRoles,
     fetchSkills,
     fetchTags,
@@ -78,8 +80,8 @@ export default function PeopleCatalogView() {
     try {
       await catalogApis[kind].delete(id);
       await catalogs[kind].fetch();
-      // The backend strips a deleted tag from every person who carried it.
-      if (kind === "tag") await fetchPeople();
+      // The backend strips a deleted tag from every person and project exclusion that had it.
+      if (kind === "tag") await Promise.all([fetchPeople(), fetchProjects()]);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -93,6 +95,8 @@ export default function PeopleCatalogView() {
     const usages: string[] = [];
     const holders = people.filter((p) => p.tags.includes(id)).length;
     if (holders > 0) usages.push(formatHeadcount(holders));
+    const excluding = projects.filter((p) => p.excluded_tags.includes(id)).length;
+    if (excluding > 0) usages.push(`${excluding} ${excluding === 1 ? "project" : "projects"}`);
     return usages.length > 0 ? ` It will be removed from ${usages.join(" and ")}.` : "";
   };
 

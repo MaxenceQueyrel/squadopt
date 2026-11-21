@@ -262,10 +262,12 @@ export default function ProjectsPage() {
   const {
     projects,
     people,
+    tags,
     isLoading,
     fetchProjects,
     fetchPeople,
     fetchSkills,
+    fetchTags,
     saveProject,
     importProjects,
   } = useAppStore();
@@ -297,11 +299,12 @@ export default function ProjectsPage() {
     fetchProjects();
     fetchPeople();
     fetchSkills();
+    fetchTags();
     assignmentsApi
       .list()
       .then(setAssignments)
       .catch((e) => setError(message(e)));
-  }, [fetchProjects, fetchPeople, fetchSkills]);
+  }, [fetchProjects, fetchPeople, fetchSkills, fetchTags]);
 
   const rows = useMemo<ProjectRow[]>(() => {
     const names = new Map(people.map((p) => [p.id, p.name]));
@@ -419,6 +422,8 @@ export default function ProjectsPage() {
             </>
           )}
           .
+          {importSummary.created_tags.length > 0 &&
+            ` Also added ${importSummary.created_tags.length} new ${importSummary.created_tags.length === 1 ? "tag" : "tags"} (${importSummary.created_tags.join(", ")}) to the catalog.`}
         </p>
       )}
       {error && (
@@ -568,6 +573,7 @@ export default function ProjectsPage() {
         <ProjectForm
           project={editing === "new" ? null : editing}
           skillOptions={skillOptions}
+          tags={tags}
           onClose={() => setEditing(null)}
           onSave={async (draft, id) => {
             await saveProject(draft, id);

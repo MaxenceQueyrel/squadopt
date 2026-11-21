@@ -68,6 +68,7 @@ export interface PeopleImportSummary {
 export interface ProjectsImportSummary {
   created: string[]; // ids of projects created by the import
   skipped: string[]; // ids that already existed and were left untouched
+  created_tags: string[]; // tag ids auto-created because the CSV referenced them
 }
 
 export interface ProjectPhase {
@@ -85,6 +86,7 @@ export interface Project {
   start_window: DateRange | null;
   priority: Priority;
   completed_at: string | null; // ISO date the project was marked complete
+  excluded_tags: string[]; // tag ids; anyone carrying one is kept off the whole project
 }
 
 export interface Assignment {

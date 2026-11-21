@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button, colors, Field, inputStyle, Modal, selectStyle } from "@/components/common/ui";
-import { emptyPhase, PhasesEditor } from "@/components/editors/listEditors";
+import { emptyPhase, PhasesEditor, TagPicker } from "@/components/editors/listEditors";
 import { errorMessage } from "@/services/api";
-import type { DateRange, Priority, Project } from "@/types";
+import type { DateRange, Priority, Project, Tag } from "@/types";
 
 const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
 
@@ -16,6 +16,7 @@ function emptyDraft(): ProjectDraft {
     start_window: null,
     priority: "medium",
     completed_at: null,
+    excluded_tags: [],
   };
 }
 
@@ -24,11 +25,13 @@ function emptyDraft(): ProjectDraft {
 export function ProjectForm({
   project,
   skillOptions,
+  tags,
   onClose,
   onSave,
 }: {
   project: Project | null;
   skillOptions: string[];
+  tags: Tag[];
   onClose: () => void;
   onSave: (draft: ProjectDraft, id?: string) => Promise<void>;
 }) {
@@ -150,6 +153,14 @@ export function ProjectForm({
           style={{ ...inputStyle, resize: "vertical" }}
         />
       </Field>
+
+      <TagPicker
+        label="Exclude people tagged"
+        hint="Anyone carrying one of these tags is kept off every phase of the project."
+        value={draft.excluded_tags}
+        onChange={(v) => set("excluded_tags", v)}
+        tags={tags}
+      />
 
       <Field
         label="Phases"

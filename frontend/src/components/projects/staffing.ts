@@ -134,6 +134,12 @@ export function formatRawScore(
   return `Raw score: ${score.toFixed(2)} / ${maxScore.toFixed(2)} (${share}% of theoretical max)`;
 }
 
+/** The tags of a project's `excludedTags` that `person` carries, in the project's order; any
+ * one of them keeps the person off the whole project. */
+export function excludingTags(excludedTags: string[], person: Person): string[] {
+  return excludedTags.filter((tag) => person.tags.includes(tag));
+}
+
 export function formatHeadcount(count: number): string {
   return `${count} ${count === 1 ? "person" : "people"}`;
 }

@@ -10,7 +10,13 @@ import {
   useDismiss,
 } from "@/components/common/ui";
 import { SkillMatch } from "@/components/projects/SkillMatch";
-import { formatFte, type SkillMatchTier, skillMatchTier } from "@/components/projects/staffing";
+import {
+  excludingTags,
+  formatFte,
+  formatHeadcount,
+  type SkillMatchTier,
+  skillMatchTier,
+} from "@/components/projects/staffing";
 import type { Person, SkillRequirement } from "@/types";
 
 const tiers: Record<SkillMatchTier, { rank: number; accent: string }> = {
@@ -50,10 +56,13 @@ const listStyle: CSSProperties = {
  * green / amber / red left accent for meeting all, some or none of them, and, once
  * `freeFte` is known, whether they have `commitment` FTE free. Rows are sorted by match
  * tier, then free FTE, then name; nobody is disabled, so a poor fit can still be picked.
+ * People carrying one of the project's `excludedTags` are left out, and a note at the bottom
+ * of the list says how many and by which tags.
  */
 export function PersonPicker({
   id,
   people,
+  excludedTags,
   value,
   onChange,
   requirements,
@@ -63,6 +72,7 @@ export function PersonPicker({
 }: {
   id: string;
   people: Person[];
+  excludedTags: string[];
   value: string;
   onChange: (personId: string) => void;
   requirements: SkillRequirement[];
@@ -78,7 +88,10 @@ export function PersonPicker({
   useDismiss(containerRef, open, () => setOpen(false));
 
   const selected = people.find((p) => p.id === value);
+  const hidden = people.filter((person) => excludingTags(excludedTags, person).length > 0);
+  const hidingTags = excludedTags.filter((tag) => hidden.some((p) => p.tags.includes(tag)));
   const candidates = people
+    .filter((person) => !hidden.includes(person))
     .map((person) => ({
       person,
       tier: skillMatchTier(person, requirements),
@@ -169,91 +182,101 @@ export function PersonPicker({
         </span>
       </div>
 
-      {open &&
-        (matches.length === 0 ? (
-          <div style={{ ...listStyle, padding: "0.6rem 0.75rem", color: colors.muted }}>
-            Nobody matches “{query.trim()}”
-          </div>
-        ) : (
-          <div id={listId} role="listbox" aria-label="People" style={listStyle}>
-            {matches.map(({ person, tier, free }, i) => {
-              const badge = free === undefined ? null : availabilityBadge(free, commitment);
-              const details = [person.role, seniorityLabels[person.seniority]].filter(Boolean);
-              return (
-                // biome-ignore lint/a11y/useKeyWithClickEvents: the combobox input owns the keyboard (aria-activedescendant)
-                <div
-                  key={person.id}
-                  id={optionId(person.id)}
-                  role="option"
-                  aria-selected={person.id === value}
-                  data-tier={tier}
-                  tabIndex={-1}
-                  // The input would blur before click fires and lose the active row.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => choose(person)}
-                  onMouseEnter={() => setActive(i)}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: "0.65rem",
-                    padding: "0.55rem 0.65rem",
-                    borderRadius: 6,
-                    borderLeft: `3px solid ${tiers[tier].accent}`,
-                    background: i === activeIndex ? colors.primaryBg : "transparent",
-                    cursor: "pointer",
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  <Avatar name={person.name} size="sm" />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                        gap: "0.4rem",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          color: tier === "none" ? colors.muted : colors.text,
-                        }}
-                      >
-                        {person.name}
-                      </span>
-                      {assignedIds.has(person.id) && (
-                        <Pill tone="primary">Already on this phase</Pill>
-                      )}
-                    </div>
-                    <div style={{ fontSize: "0.8rem", color: colors.muted }}>
-                      {details.join(" · ")}
-                    </div>
-                    {requirements.length > 0 && (
+      {open && (
+        <div style={listStyle}>
+          {matches.length === 0 ? (
+            <div style={{ padding: "0.35rem 0.5rem", color: colors.muted }}>
+              {search ? `Nobody matches “${query.trim()}”` : "Nobody to pick"}
+            </div>
+          ) : (
+            <div id={listId} role="listbox" aria-label="People">
+              {matches.map(({ person, tier, free }, i) => {
+                const badge = free === undefined ? null : availabilityBadge(free, commitment);
+                const details = [person.role, seniorityLabels[person.seniority]].filter(Boolean);
+                return (
+                  // biome-ignore lint/a11y/useKeyWithClickEvents: the combobox input owns the keyboard (aria-activedescendant)
+                  <div
+                    key={person.id}
+                    id={optionId(person.id)}
+                    role="option"
+                    aria-selected={person.id === value}
+                    data-tier={tier}
+                    tabIndex={-1}
+                    // The input would blur before click fires and lose the active row.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => choose(person)}
+                    onMouseEnter={() => setActive(i)}
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.65rem",
+                      padding: "0.55rem 0.65rem",
+                      borderRadius: 6,
+                      borderLeft: `3px solid ${tiers[tier].accent}`,
+                      background: i === activeIndex ? colors.primaryBg : "transparent",
+                      cursor: "pointer",
+                      fontSize: "0.875rem",
+                    }}
+                  >
+                    <Avatar name={person.name} size="sm" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
                           display: "flex",
                           flexWrap: "wrap",
-                          gap: "0.35rem",
-                          marginTop: "0.35rem",
+                          alignItems: "center",
+                          gap: "0.4rem",
                         }}
                       >
-                        {requirements.map((req) => (
-                          <SkillMatch key={req.id} person={person} requirement={req} />
-                        ))}
+                        <span
+                          style={{
+                            fontWeight: 600,
+                            color: tier === "none" ? colors.muted : colors.text,
+                          }}
+                        >
+                          {person.name}
+                        </span>
+                        {assignedIds.has(person.id) && (
+                          <Pill tone="primary">Already on this phase</Pill>
+                        )}
                       </div>
+                      <div style={{ fontSize: "0.8rem", color: colors.muted }}>
+                        {details.join(" · ")}
+                      </div>
+                      {requirements.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "0.35rem",
+                            marginTop: "0.35rem",
+                          }}
+                        >
+                          {requirements.map((req) => (
+                            <SkillMatch key={req.id} person={person} requirement={req} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {badge && (
+                      <Pill tone={badge.tone} icon={badge.icon}>
+                        {badge.label}
+                      </Pill>
                     )}
                   </div>
-                  {badge && (
-                    <Pill tone={badge.tone} icon={badge.icon}>
-                      {badge.label}
-                    </Pill>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                );
+              })}
+            </div>
+          )}
+          {hidden.length > 0 && (
+            <div
+              style={{ padding: "0.45rem 0.5rem 0.2rem", fontSize: "0.8rem", color: colors.muted }}
+            >
+              {formatHeadcount(hidden.length)} hidden — excluded by tag: {hidingTags.join(", ")}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
