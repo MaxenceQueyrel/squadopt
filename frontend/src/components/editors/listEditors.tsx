@@ -444,7 +444,6 @@ export function TagSkillInput({
         onSelect={add}
         onEnter={addTyped}
         onBlur={addTyped}
-        emptyLabel="No matching skill"
       />
     </div>
   );
