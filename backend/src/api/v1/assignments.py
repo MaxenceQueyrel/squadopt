@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.core.deps import require_org_member
 from api.models.assignment import Assignment, AssignmentCreate
 from api.repositories.file_repository import FileRepository
+from api.v1 import people as people_module
+from api.v1 import projects as projects_module
 from optimizer.grid import GRID_TOLERANCE
 
 router = APIRouter()
@@ -27,6 +29,22 @@ def _validate_fte(
         raise HTTPException(
             status_code=400,
             detail="Overlapping assignments for this person would exceed 1.0 FTE",
+        )
+
+
+def _reject_excluded_person(data: AssignmentCreate, organization_id: str) -> None:
+    project = projects_module.repo.get(data.project_id, organization_id)
+    person = people_module.repo.get(data.person_id, organization_id)
+    if project is None or person is None:
+        return
+    matching = project.excluding_tags(person.tags)
+    if matching:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{person.name} is excluded from '{project.name}' "
+                f"by tag: {', '.join(matching)}"
+            ),
         )
 
 
@@ -58,6 +76,7 @@ def get_assignment(
 def create_assignment(
     data: AssignmentCreate, organization_id: str = Depends(require_org_member)
 ):
+    _reject_excluded_person(data, organization_id)
     _validate_fte(data, organization_id)
     return repo.create(data.model_dump(), organization_id)
 
@@ -68,6 +87,7 @@ def update_assignment(
     data: AssignmentCreate,
     organization_id: str = Depends(require_org_member),
 ):
+    _reject_excluded_person(data, organization_id)
     _validate_fte(data, organization_id, exclude_id=assignment_id)
     assignment = repo.update(assignment_id, data.model_dump(), organization_id)
     if not assignment:

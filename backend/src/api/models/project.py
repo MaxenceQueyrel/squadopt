@@ -55,6 +55,11 @@ class ProjectBase(BaseModel):
     # Absolute earliest/latest allowed start; it bounds the start only, so the
     # project may end after start_window.end.
     start_window: DateRange | None = None
+    # A person carrying any of these tags is kept off every phase of the project.
+    excluded_tags: list[str] = []
+
+    def excluding_tags(self, person_tags: list[str]) -> list[str]:
+        return [tag for tag in self.excluded_tags if tag in person_tags]
 
     @model_validator(mode="after")
     def _check_phases(self) -> Self:
