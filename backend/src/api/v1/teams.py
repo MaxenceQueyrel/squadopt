@@ -80,7 +80,9 @@ def _resolve_assignments(team: Team, project: Project) -> list[AssignmentCreate]
     return resolved
 
 
-def _reject_excluded_members(team: Team, project: Project, organization_id: str):
+def _reject_excluded_members(
+    team: Team, project: Project, organization_id: str
+) -> None:
     people_by_id = {
         person.id: person for person in people_module.repo.list(organization_id)
     }
