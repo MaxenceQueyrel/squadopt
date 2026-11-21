@@ -370,6 +370,29 @@ test("an assigned person shows reduced availability on their detail page", async
   await expect(page.getByRole("heading", { level: 1, name: projectName })).toBeVisible();
 });
 
+test("the directory lists a person's current projects and links to them", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const name = `Margaret Hamilton ${suffix}`;
+  const projectName = `Apollo ${suffix}`;
+  await createPerson(page, name, `qa-engineer-${suffix}`);
+  const row = page.getByRole("row", { name });
+  await expect(row.getByRole("cell").nth(4)).toHaveText("—");
+
+  await createProject(page, projectName);
+  await page.getByRole("link", { name: projectName }).click();
+  await page.getByRole("button", { name: "Assign person to Whole project" }).click();
+  await pickPerson(page, name);
+  await page.getByLabel("Start date", { exact: true }).fill("2099-01-01");
+  await page.getByLabel("End date", { exact: true }).fill("2099-01-31");
+  await page.getByRole("button", { name: "Assign", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Staffing" })).toContainText(name);
+
+  await page.goto("/people");
+  await row.getByRole("link", { name: projectName }).click();
+  await expect(page).toHaveURL(/\/projects\/[^/]+$/);
+  await expect(page.getByRole("heading", { level: 1, name: projectName })).toBeVisible();
+});
+
 test("an unknown person id shows a not-found state", async ({ page }) => {
   await page.goto(`/people/does-not-exist-${uniqueSuffix()}`);
 

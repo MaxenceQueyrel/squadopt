@@ -27,6 +27,7 @@ import { useAuthStore } from "@/store/authStore";
 import type { Person, Seniority } from "@/types";
 
 const SENIORITIES: Seniority[] = ["junior", "mid", "senior", "lead"];
+const MAX_LISTED_PROJECTS = 3;
 
 interface DirectoryFilters {
   query: string;
@@ -81,14 +82,15 @@ const bodyCell = {
 } as const;
 
 export default function PeoplePage() {
-  const { people, roles, skills, isLoading, deletePerson, createRole, createSkill } = useAppStore();
+  const { people, projects, roles, skills, isLoading, deletePerson, createRole, createSkill } =
+    useAppStore();
   const roleOptions = useAppStore(useShallow(knownRoleIds));
   const skillOptions = useAppStore(useShallow(knownSkillIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
   const canDeletePeople = useAuthStore((s) => s.permissions.has("people:delete"));
   const canWriteRoles = useAuthStore((s) => s.permissions.has("roles:write"));
   const canWriteSkills = useAuthStore((s) => s.permissions.has("skills:write"));
-  const { freeRatios, editPerson } = useOutletContext<PeopleWorkspaceContext>();
+  const { freeRatios, currentProjectIds, editPerson } = useOutletContext<PeopleWorkspaceContext>();
   const [catalogKind, setCatalogKind] = useState<CatalogKind | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // The URL only mirrors this state, as in PeopleCapacityView: binding the inputs to the URL
@@ -129,6 +131,9 @@ export default function PeoplePage() {
       holders: people.filter((p) => p.skills.some((s) => s.id === id)).map((p) => p.name),
     }))
     .sort((a, b) => b.holders.length - a.holders.length || a.id.localeCompare(b.id));
+
+  const projectName = (projectId: string) =>
+    projects.find((p) => p.id === projectId)?.name ?? projectId;
 
   const rowActions = (person: Person): MenuItem[] => {
     const items: MenuItem[] = [];
@@ -209,6 +214,7 @@ export default function PeoplePage() {
                 <th style={headerCell}>Seniority</th>
                 <th style={headerCell}>FTE</th>
                 <th style={headerCell}>Free next {FREE_HORIZON_DAYS} days</th>
+                <th style={headerCell}>Projects</th>
                 <th style={headerCell}>Skills</th>
                 <th style={headerCell} aria-label="Actions" />
               </tr>
@@ -216,7 +222,7 @@ export default function PeoplePage() {
             <tbody>
               {filteredPeople.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ ...bodyCell, color: colors.muted, textAlign: "center" }}>
+                  <td colSpan={7} style={{ ...bodyCell, color: colors.muted, textAlign: "center" }}>
                     No one matches these filters.{" "}
                     <Button variant="ghost" size="sm" onClick={() => setFilters(NO_FILTERS)}>
                       Clear filters
@@ -226,6 +232,8 @@ export default function PeoplePage() {
               )}
               {filteredPeople.map((p) => {
                 const free = freeRatios.get(p.id);
+                const projectIds = currentProjectIds.get(p.id) ?? [];
+                const hiddenProjectIds = projectIds.slice(MAX_LISTED_PROJECTS);
                 const actions = rowActions(p);
                 return (
                   <tr key={p.id}>
@@ -265,6 +273,31 @@ export default function PeoplePage() {
                           >
                             {formatFte(free)}
                           </span>
+                        </div>
+                      )}
+                    </td>
+                    <td style={bodyCell}>
+                      {projectIds.length === 0 ? (
+                        <span style={{ color: colors.subtle }}>—</span>
+                      ) : (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem 0.75rem" }}>
+                          {projectIds.slice(0, MAX_LISTED_PROJECTS).map((projectId) => (
+                            <Link
+                              key={projectId}
+                              to={`/projects/${encodeURIComponent(projectId)}`}
+                              style={{ fontWeight: 500 }}
+                            >
+                              {projectName(projectId)}
+                            </Link>
+                          ))}
+                          {hiddenProjectIds.length > 0 && (
+                            <span
+                              title={hiddenProjectIds.map(projectName).join(", ")}
+                              style={{ color: colors.muted, fontSize: "0.85rem" }}
+                            >
+                              +{hiddenProjectIds.length} more
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>
