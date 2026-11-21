@@ -6,11 +6,11 @@ import { addDays, isoToday } from "@/components/common/dates";
 import { Button, colors, IconButton, PageHeader, Tabs } from "@/components/common/ui";
 import { PersonForm } from "@/components/people/PersonForm";
 import { averageFreeFte, formatFte, formatHeadcount } from "@/components/projects/staffing";
-import { errorMessage, peopleApi } from "@/services/api";
+import { assignmentsApi, errorMessage, peopleApi } from "@/services/api";
 import { downloadBlob } from "@/services/download";
 import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
-import type { AvailabilitySegment, PeopleImportSummary, Person } from "@/types";
+import type { Assignment, AvailabilitySegment, PeopleImportSummary, Person } from "@/types";
 
 export const FREE_HORIZON_DAYS = 30;
 
@@ -18,6 +18,8 @@ export const FREE_HORIZON_DAYS = 30;
 export interface PeopleWorkspaceContext {
   // Average FTE each person has free over the next FREE_HORIZON_DAYS, keyed by person id.
   freeRatios: Map<string, number>;
+  // Ids of the projects each person has a current assignment on, keyed by person id.
+  currentProjectIds: Map<string, string[]>;
   editPerson: (person: Person) => void;
 }
 
@@ -25,6 +27,21 @@ export interface PeopleWorkspaceContext {
  * availability segments that may extend past either end of that window. */
 export function freeNextDays(segments: AvailabilitySegment[], today: string): number {
   return averageFreeFte(segments, { start: today, end: addDays(today, FREE_HORIZON_DAYS - 1) });
+}
+
+function currentProjectIdsByPerson(
+  assignments: Assignment[],
+  today: string,
+): Map<string, string[]> {
+  const byPerson = new Map<string, string[]>();
+  const sorted = [...assignments].sort((a, b) => a.start.localeCompare(b.start));
+  for (const a of sorted) {
+    if (a.end < today) continue;
+    const projectIds = byPerson.get(a.person_id) ?? [];
+    if (!projectIds.includes(a.project_id)) projectIds.push(a.project_id);
+    byPerson.set(a.person_id, projectIds);
+  }
+  return byPerson;
 }
 
 function summaryLine(people: Person[], freeRatios: Map<string, number>): string {
@@ -46,8 +63,16 @@ function summaryLine(people: Person[], freeRatios: Map<string, number>): string 
 /** Shared frame of the People workspace: the header with its summary line and roster actions,
  * the Directory / Capacity / Roles & skills tabs, and the person form they open. */
 export default function PeopleWorkspace() {
-  const { people, roles, fetchPeople, fetchRoles, fetchSkills, savePerson, importPeople } =
-    useAppStore();
+  const {
+    people,
+    roles,
+    fetchPeople,
+    fetchProjects,
+    fetchRoles,
+    fetchSkills,
+    savePerson,
+    importPeople,
+  } = useAppStore();
   const roleOptions = useAppStore(useShallow(knownRoleIds));
   const skillOptions = useAppStore(useShallow(knownSkillIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
@@ -66,15 +91,18 @@ export default function PeopleWorkspace() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [freeRatios, setFreeRatios] = useState<Map<string, number>>(new Map());
+  const [currentProjectIds, setCurrentProjectIds] = useState<Map<string, string[]>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchPeople();
+    fetchProjects();
     fetchRoles();
     fetchSkills();
-  }, [fetchPeople, fetchRoles, fetchSkills]);
+  }, [fetchPeople, fetchProjects, fetchRoles, fetchSkills]);
 
-  // Re-run whenever the roster is refetched so a saved working-pattern or vacation change shows up.
+  // Re-run whenever the roster is refetched so a saved working-pattern or vacation change, or an
+  // assignment made from a person's detail page, shows up.
   useEffect(() => {
     if (people.length === 0) return;
     const today = isoToday();
@@ -85,6 +113,10 @@ export default function PeopleWorkspace() {
           new Map(availability.map((a) => [a.person_id, freeNextDays(a.segments, today)])),
         ),
       )
+      .catch((e) => setError(errorMessage(e)));
+    assignmentsApi
+      .list()
+      .then((assignments) => setCurrentProjectIds(currentProjectIdsByPerson(assignments, today)))
       .catch((e) => setError(errorMessage(e)));
   }, [people]);
 
@@ -126,7 +158,11 @@ export default function PeopleWorkspace() {
     },
     { value: "catalog", label: "Roles & skills", to: "/people/catalog" },
   ];
-  const context: PeopleWorkspaceContext = { freeRatios, editPerson: setEditing };
+  const context: PeopleWorkspaceContext = {
+    freeRatios,
+    currentProjectIds,
+    editPerson: setEditing,
+  };
 
   return (
     <div>
