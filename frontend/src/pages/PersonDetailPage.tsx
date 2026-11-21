@@ -34,7 +34,7 @@ import { WeeklyAvailability } from "@/components/people/WeeklyAvailability";
 import { commitmentForRatio } from "@/components/projects/StaffingLaneCard";
 import { buildLanes, formatFte, isOpenForStaffing } from "@/components/projects/staffing";
 import { assignmentsApi, errorMessage, peopleApi } from "@/services/api";
-import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
+import { catalogSkillIds, knownRoleIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 import type { Assignment, Person, Project } from "@/types";
 
@@ -87,7 +87,7 @@ export default function PersonDetailPage() {
     savePerson,
   } = useAppStore();
   const roleOptions = useAppStore(useShallow(knownRoleIds));
-  const skillOptions = useAppStore(useShallow(knownSkillIds));
+  const skillOptions = useAppStore(useShallow(catalogSkillIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
   const [person, setPerson] = useState<Person | null>(null);
   const [notFound, setNotFound] = useState(false);

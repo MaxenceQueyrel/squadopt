@@ -8,7 +8,7 @@ import { PersonForm } from "@/components/people/PersonForm";
 import { averageFreeFte, formatFte, formatHeadcount } from "@/components/projects/staffing";
 import { assignmentsApi, errorMessage, peopleApi } from "@/services/api";
 import { downloadBlob } from "@/services/download";
-import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
+import { catalogSkillIds, knownRoleIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 import type { Assignment, AvailabilitySegment, PeopleImportSummary, Person } from "@/types";
 
@@ -88,7 +88,7 @@ export default function PeopleWorkspace() {
     importPeople,
   } = useAppStore();
   const roleOptions = useAppStore(useShallow(knownRoleIds));
-  const skillOptions = useAppStore(useShallow(knownSkillIds));
+  const skillOptions = useAppStore(useShallow(catalogSkillIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
   const location = useLocation();
   // This layout stays mounted across the tabs, so it can remember each tab's filters and

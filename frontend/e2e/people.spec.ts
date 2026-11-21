@@ -192,12 +192,12 @@ test("a skill nobody has shows as a coverage gap and is described on the Roles &
   await expect(page.getByRole("row", { name: skillId })).toContainText("Spotting staffing gaps");
 });
 
-test("a skill picked for a person is hidden from their other skill rows", async ({ page }) => {
+test("a person's skills come from the catalog, each picked once", async ({ page }) => {
   const suffix = uniqueSuffix();
   const alpha = `alpha-${suffix}`;
   const beta = `beta-${suffix}`;
   const roleId = `qa-engineer-${suffix}`;
-  const suggestion = (skill: string) => page.getByRole("button", { name: skill, exact: true });
+  const name = `Catalog Skills ${suffix}`;
 
   await page.goto("/people");
   await page.getByRole("button", { name: "Add role", exact: true }).click();
@@ -211,24 +211,34 @@ test("a skill picked for a person is hidden from their other skill rows", async 
   }
 
   await page.getByRole("button", { name: "Add person", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill(`No Duplicates ${suffix}`);
+  await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("combobox", { name: /^Role/ }).selectOption(roleId);
   const addSkillRow = page.getByRole("button").filter({ hasText: "+ Add skill" });
-  const skillIds = page.getByPlaceholder("skill id", { exact: true });
+  const skillRows = page.getByRole("combobox", { name: "Skill", exact: true });
   await addSkillRow.click();
-  await skillIds.last().fill(alpha);
-  // Clicking outside the skill combobox closes its suggestion list, which would cover the button.
-  await page.getByTitle("Proficiency level (0–5)").click();
+  await skillRows.last().selectOption(alpha);
   await addSkillRow.click();
-  await skillIds.last().fill(suffix);
-  await expect(suggestion(beta)).toBeVisible();
-  await expect(suggestion(alpha)).toHaveCount(0);
-  await skillIds.first().click();
-  await expect(suggestion(alpha)).toBeVisible();
+  await expect(skillRows.last().getByRole("option", { name: beta })).toHaveCount(1);
+  await expect(skillRows.last().getByRole("option", { name: alpha })).toHaveCount(0);
+  await expect(skillRows.first().getByRole("option", { name: alpha })).toHaveCount(1);
+  await skillRows.last().selectOption(beta);
 
-  await skillIds.last().fill(alpha);
+  // A typed skill is only kept when it names one from the catalog.
+  const preferences = page.getByPlaceholder("search skills, or pick one below").first();
+  await preferences.fill(`not-in-catalog-${suffix}`);
+  await preferences.press("Enter");
+  await expect(preferences).toHaveValue("");
+  await expect(page.getByRole("button", { name: `Remove not-in-catalog-${suffix}` })).toHaveCount(
+    0,
+  );
+  await preferences.fill(beta);
+  await preferences.press("Enter");
+  await expect(page.getByRole("button", { name: `Remove ${beta}` })).toBeVisible();
+
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("alert")).toHaveText(`Skill "${alpha}" is listed more than once.`);
+  await page.getByRole("link", { name }).click();
+  await expect(page.getByText(alpha, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(beta, { exact: true }).first()).toBeVisible();
 });
 
 test("searching the Roles and Skill coverage cards narrows their rows", async ({ page }) => {

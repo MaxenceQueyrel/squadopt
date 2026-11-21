@@ -53,7 +53,7 @@ import {
   staffedFte,
 } from "@/components/projects/staffing";
 import { assignmentsApi, errorMessage, peopleApi } from "@/services/api";
-import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
+import { catalogSkillIds, knownRoleIds, knownSkillIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 import type {
   Assignment,
@@ -250,6 +250,7 @@ export default function DashboardPage() {
     saveProject,
   } = useAppStore();
   const skills = useAppStore(useShallow(knownSkillIds));
+  const catalogSkills = useAppStore(useShallow(catalogSkillIds));
   const roleOptions = useAppStore(useShallow(knownRoleIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
   const canWriteProjects = useAuthStore((s) => s.permissions.has("projects:write"));
@@ -398,7 +399,7 @@ export default function DashboardPage() {
           roles={roles}
           tags={tags}
           roleOptions={roleOptions}
-          skillOptions={skills}
+          skillOptions={catalogSkills}
           onClose={() => setCreating(null)}
           onSave={async (draft) => {
             await savePerson(draft);

@@ -46,6 +46,8 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+/** A person's skill rows, each picked from the catalog. Skills can't be typed, so a person
+ * never gets one the catalog doesn't know; one recorded before that rule stays on its row. */
 export function SkillsEditor({
   value,
   onChange,
@@ -57,20 +59,30 @@ export function SkillsEditor({
 }) {
   const update = (i: number, patch: Partial<SkillLevel>) =>
     onChange(value.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const unused = skillOptions.filter((o) => !value.some((s) => s.id === o));
 
   return (
     <div>
       {value.map((s, i) => (
         <div key={i} style={rowStyle}>
-          <Combobox
-            placeholder="skill id"
+          <select
+            aria-label="Skill"
             value={s.id}
-            onChange={(id) => update(i, { id })}
-            options={skillOptions.filter(
-              (o) => !value.some((other, idx) => idx !== i && other.id.trim() === o),
+            onChange={(e) => update(i, { id: e.target.value })}
+            style={{ ...selectStyle, flex: 1 }}
+          >
+            <option value="">Select a skill</option>
+            {s.id && !skillOptions.includes(s.id) && (
+              <option value={s.id}>{s.id} (not in catalog)</option>
             )}
-            style={{ flex: 1 }}
-          />
+            {skillOptions
+              .filter((o) => o === s.id || !value.some((other) => other.id === o))
+              .map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+          </select>
           <input
             type="number"
             min={0}
@@ -84,7 +96,17 @@ export function SkillsEditor({
           <RemoveButton onClick={() => onChange(value.filter((_, idx) => idx !== i))} />
         </div>
       ))}
-      <Button onClick={() => onChange([...value, { id: "", level: 3 }])}>+ Add skill</Button>
+      <Button
+        disabled={unused.length === 0}
+        onClick={() => onChange([...value, { id: "", level: 3 }])}
+      >
+        + Add skill
+      </Button>
+      {skillOptions.length === 0 && (
+        <div style={{ marginTop: 4, fontSize: "0.75rem", color: colors.muted }}>
+          Create a skill in the catalog first, then come back here to assign it.
+        </div>
+      )}
     </div>
   );
 }
@@ -345,11 +367,13 @@ export function AffinitiesEditor({
   );
 }
 
+/** Skill chips picked from `skillOptions`. Typed text only adds a skill when it names one of
+ * the options, so a skill outside them is never recorded. */
 export function TagSkillInput({
   value,
   onChange,
   skillOptions,
-  placeholder = "type a skill id, or pick one below",
+  placeholder = "search skills, or pick one below",
 }: {
   value: string[];
   onChange: (v: string[]) => void;
@@ -357,10 +381,16 @@ export function TagSkillInput({
   placeholder?: string;
 }) {
   const [draft, setDraft] = useState("");
-  const add = (tag: string) => {
-    const v = tag.trim();
-    if (v && !value.includes(v)) onChange([...value, v]);
+  const available = skillOptions.filter((o) => !value.includes(o));
+  const add = (skill: string) => {
+    onChange([...value, skill]);
     setDraft("");
+  };
+  const addTyped = () => {
+    const query = draft.trim().toLowerCase();
+    const match = available.find((o) => o.toLowerCase() === query);
+    if (match) add(match);
+    else setDraft("");
   };
 
   return (
@@ -409,12 +439,12 @@ export function TagSkillInput({
       <Combobox
         value={draft}
         onChange={setDraft}
-        options={skillOptions.filter((o) => !value.includes(o))}
+        options={available}
         placeholder={placeholder}
         onSelect={add}
-        onEnter={() => add(draft)}
-        onBlur={() => add(draft)}
-        emptyLabel="No matching skill — press Enter to add it as typed"
+        onEnter={addTyped}
+        onBlur={addTyped}
+        emptyLabel="No matching skill"
       />
     </div>
   );

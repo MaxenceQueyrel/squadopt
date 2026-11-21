@@ -250,6 +250,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearError: () => set({ error: null }),
 }));
 
+/** Skill ids in the skills catalog: the only skills a person can be given. */
+export function catalogSkillIds(state: AppState): string[] {
+  return state.skills.map((s) => s.id).sort();
+}
+
 /** Distinct skill ids known across the skills catalog, people, and projects. */
 export function knownSkillIds(state: AppState): string[] {
   const ids = new Set<string>();
