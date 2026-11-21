@@ -11,6 +11,7 @@ from api.repositories.file_repository import FileRepository
 from api.v1 import assignments as assignments_module
 from api.v1 import roles as roles_module
 from api.v1 import skills as skills_module
+from api.v1 import tags as tags_module
 from optimizer.availability import daily_availability
 from optimizer.models import AvailabilityWindow, DateRange
 
@@ -78,6 +79,7 @@ class ImportSummary(BaseModel):
     skipped: list[str]
     created_roles: list[str] = []
     created_skills: list[str] = []
+    created_tags: list[str] = []
 
 
 @router.post("/import", response_model=ImportSummary)
@@ -88,15 +90,17 @@ def import_people(file: UploadFile, organization_id: str = Depends(require_org_m
     except PersonCsvRowError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    # Roles and skills referenced by the CSV that aren't in the catalog yet are
-    # created on the fly, rather than failing the import — a CSV is often the
-    # first time a roster (and its roles/skills) is entered into the system.
+    # Roles, skills and tags referenced by the CSV that aren't in the catalog yet
+    # are created on the fly, rather than failing the import — a CSV is often the
+    # first time a roster (and its roles/skills/tags) is entered into the system.
     existing_role_ids = {role.id for role in roles_module.repo.list(organization_id)}
     existing_skill_ids = {
         skill.id for skill in skills_module.repo.list(organization_id)
     }
+    existing_tag_ids = {tag.id for tag in tags_module.repo.list(organization_id)}
     created_roles: list[str] = []
     created_skills: list[str] = []
+    created_tags: list[str] = []
 
     def _ensure_skill(skill_id: str, description: str = "") -> None:
         # A blank id would make FileRepository.create() mint a random uuid instead,
@@ -124,6 +128,14 @@ def import_people(file: UploadFile, organization_id: str = Depends(require_org_m
         for skill_id in (*data.preferences, *data.growth_targets):
             _ensure_skill(skill_id)
 
+        for tag_id in data.tags:
+            if tag_id and tag_id not in existing_tag_ids:
+                tags_module.repo.create(
+                    {"id": tag_id, "description": ""}, organization_id
+                )
+                existing_tag_ids.add(tag_id)
+                created_tags.append(tag_id)
+
         if repo.get(person_id, organization_id):
             skipped.append(person_id)
             continue
@@ -135,6 +147,7 @@ def import_people(file: UploadFile, organization_id: str = Depends(require_org_m
         skipped=skipped,
         created_roles=created_roles,
         created_skills=created_skills,
+        created_tags=created_tags,
     )
 
 
@@ -161,6 +174,7 @@ def create_person(
     data: PersonCreate, organization_id: str = Depends(require_org_member)
 ):
     _require_known_role(data.role, organization_id)
+    tags_module.require_known_tags(data.tags, organization_id)
     return repo.create(data.model_dump(), organization_id)
 
 
@@ -171,6 +185,7 @@ def update_person(
     organization_id: str = Depends(require_org_member),
 ):
     _require_known_role(data.role, organization_id)
+    tags_module.require_known_tags(data.tags, organization_id)
     person = repo.update(person_id, data.model_dump(), organization_id)
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")

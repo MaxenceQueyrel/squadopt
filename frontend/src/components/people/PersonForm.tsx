@@ -1,7 +1,12 @@
 import { useMemo, useState } from "react";
 import { Button, colors, Field, inputStyle, Modal, selectStyle } from "@/components/common/ui";
-import { AffinitiesEditor, SkillsEditor, TagSkillInput } from "@/components/editors/listEditors";
-import type { Person, PersonInput, Role, Seniority } from "@/types";
+import {
+  AffinitiesEditor,
+  SkillsEditor,
+  TagPicker,
+  TagSkillInput,
+} from "@/components/editors/listEditors";
+import type { Person, PersonInput, Role, Seniority, Tag } from "@/types";
 
 const SENIORITIES: Seniority[] = ["junior", "mid", "senior", "lead"];
 const WORKING_DAYS = [1, 2, 3, 4, 5, 6, 7];
@@ -25,6 +30,7 @@ function emptyDraft(): PersonDraft {
     preferences: [],
     growth_targets: [],
     affinities: {},
+    tags: [],
   };
 }
 
@@ -33,6 +39,7 @@ export function PersonForm({
   person,
   people,
   roles,
+  tags,
   roleOptions,
   skillOptions,
   onClose,
@@ -41,6 +48,7 @@ export function PersonForm({
   person: Person | null;
   people: Person[];
   roles: Role[];
+  tags: Tag[];
   roleOptions: string[];
   skillOptions: string[];
   onClose: () => void;
@@ -50,7 +58,6 @@ export function PersonForm({
     person ? { ...emptyDraft(), ...person } : emptyDraft(),
   );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const set = <K extends keyof PersonDraft>(key: K, val: PersonDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: val }));
 
@@ -61,14 +68,6 @@ export function PersonForm({
   };
 
   const submit = async () => {
-    // The skill pickers hide skills already chosen, but a duplicate can still be typed by hand.
-    const skillIds = draft.skills.map((skill) => skill.id.trim());
-    const repeated = skillIds.find((id, i) => skillIds.indexOf(id) !== i);
-    if (repeated) {
-      setError(`Skill "${repeated}" is listed more than once.`);
-      return;
-    }
-    setError(null);
     setSaving(true);
     try {
       await onSave(draft, person?.id);
@@ -153,7 +152,15 @@ export function PersonForm({
         </select>
       </Field>
 
-      <Field label="Skills" hint="Add skill ids from the catalog above.">
+      <TagPicker
+        label="Tags"
+        hint="Projects can exclude everyone carrying a tag."
+        value={draft.tags}
+        onChange={(v) => set("tags", v)}
+        tags={tags}
+      />
+
+      <Field label="Skills" hint="Pick skills from the catalog above.">
         <SkillsEditor
           value={draft.skills}
           onChange={(v) => set("skills", v)}
@@ -187,12 +194,6 @@ export function PersonForm({
           people={others}
         />
       </Field>
-
-      {error && (
-        <p role="alert" style={{ color: colors.danger, margin: 0 }}>
-          {error}
-        </p>
-      )}
     </Modal>
   );
 }

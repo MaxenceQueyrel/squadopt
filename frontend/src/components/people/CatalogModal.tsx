@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { Button, colors, Field, inputStyle, Modal } from "@/components/common/ui";
 import { errorMessage } from "@/services/api";
-import type { Role, Skill } from "@/types";
+import type { Role, Skill, Tag } from "@/types";
 
-export type CatalogKind = "role" | "skill";
-export type CatalogItem = Role | Skill;
+export type CatalogKind = "role" | "skill" | "tag";
+export type CatalogItem = Role | Skill | Tag;
 
-/** Modal to add a role or skill to the catalog, or to edit the description of `item`. */
+export const catalogNouns: Record<CatalogKind, string> = {
+  role: "Role",
+  skill: "Skill",
+  tag: "Tag",
+};
+
+/** Modal to add a role, skill or tag to the catalog, or to edit the description of `item`. */
 export function CatalogModal({
   kind,
   items,
@@ -25,7 +31,7 @@ export function CatalogModal({
   const [error, setError] = useState<string | null>(null);
   const normalizedId = draft.id.trim();
   const duplicate = !item && items.some((existing) => existing.id === normalizedId);
-  const noun = kind === "role" ? "role" : "skill";
+  const noun = catalogNouns[kind].toLowerCase();
 
   const submit = async () => {
     setSaving(true);
@@ -57,7 +63,7 @@ export function CatalogModal({
       }
     >
       <Field
-        label={kind === "role" ? "Role id" : "Skill id"}
+        label={`${catalogNouns[kind]} id`}
         hint={
           item
             ? "People and projects reference this id, so it can't be renamed."

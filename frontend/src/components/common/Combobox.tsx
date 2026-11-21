@@ -45,7 +45,6 @@ export function Combobox({
   onSelect,
   onEnter,
   onBlur,
-  emptyLabel = "No match — press Enter to use as typed",
   style,
 }: {
   value: string;
@@ -55,7 +54,6 @@ export function Combobox({
   onSelect?: (option: string) => void;
   onEnter?: () => void;
   onBlur?: () => void;
-  emptyLabel?: string;
   style?: CSSProperties;
 }) {
   const [open, setOpen] = useState(false);
@@ -139,7 +137,7 @@ export function Combobox({
       {open && (
         <ul style={listStyle}>
           {matches.length === 0 ? (
-            <li style={{ ...optionStyle, color: colors.muted, cursor: "default" }}>{emptyLabel}</li>
+            <li style={{ ...optionStyle, color: colors.muted, cursor: "default" }}>No match</li>
           ) : (
             matches.map((option, i) => (
               <li key={option}>

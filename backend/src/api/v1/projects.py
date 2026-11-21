@@ -10,6 +10,7 @@ from api.core.projects_csv import (
 )
 from api.models.project import Project, ProjectCreate
 from api.repositories.file_repository import FileRepository
+from api.v1 import tags as tags_module
 
 router = APIRouter()
 repo: FileRepository[Project] = FileRepository("projects", Project)
@@ -23,6 +24,7 @@ def list_projects(organization_id: str = Depends(require_org_member)):
 class ImportSummary(BaseModel):
     created: list[str]
     skipped: list[str]
+    created_tags: list[str] = []
 
 
 @router.post("/import", response_model=ImportSummary)
@@ -35,16 +37,28 @@ def import_projects(
     except ProjectCsvRowError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # Excluded tags missing from the catalog are created, as the people import
+    # does, so an export from another organization imports as-is.
+    existing_tag_ids = {tag.id for tag in tags_module.repo.list(organization_id)}
+    created_tags: list[str] = []
     created: list[str] = []
     skipped: list[str] = []
     for project_id, data in rows:
+        for tag_id in data.excluded_tags:
+            if tag_id and tag_id not in existing_tag_ids:
+                tags_module.repo.create(
+                    {"id": tag_id, "description": ""}, organization_id
+                )
+                existing_tag_ids.add(tag_id)
+                created_tags.append(tag_id)
+
         if repo.get(project_id, organization_id):
             skipped.append(project_id)
             continue
         repo.create({**data.model_dump(), "id": project_id}, organization_id)
         created.append(project_id)
 
-    return ImportSummary(created=created, skipped=skipped)
+    return ImportSummary(created=created, skipped=skipped, created_tags=created_tags)
 
 
 @router.get("/export")
@@ -69,6 +83,7 @@ def get_project(project_id: str, organization_id: str = Depends(require_org_memb
 def create_project(
     data: ProjectCreate, organization_id: str = Depends(require_org_member)
 ):
+    tags_module.require_known_tags(data.excluded_tags, organization_id)
     return repo.create(data.model_dump(), organization_id)
 
 
@@ -78,6 +93,7 @@ def update_project(
     data: ProjectCreate,
     organization_id: str = Depends(require_org_member),
 ):
+    tags_module.require_known_tags(data.excluded_tags, organization_id)
     project = repo.update(project_id, data.model_dump(), organization_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

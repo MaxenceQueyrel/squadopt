@@ -78,6 +78,76 @@ test("importing a CSV with unknown roles/skills adds them to the catalog", async
   await expect(row.getByText(skillId)).toHaveText(`${skillId}3`);
 });
 
+test("importing a CSV with unknown tags adds them to the catalog", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  const roleId = `tag-import-role-${suffix}`;
+  const tagId = `tag-import-${suffix}`;
+  const name = `Tag Import ${suffix}`;
+
+  await page.goto("/people");
+
+  const csv = [
+    "id,name,role,seniority,working_days_per_week,manager_id,skills,vacations,availability_windows,preferences,growth_targets,affinities,tags",
+    `imported-${suffix},${name},${roleId},mid,5,,[],[],[],[],[],{},"[""${tagId}""]"`,
+  ].join("\n");
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "people.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
+
+  await expect(
+    page.getByText(`Also added 1 new role and 1 new tag (${tagId}) to the catalog.`),
+  ).toBeVisible();
+  await expect(page.getByRole("row", { name }).getByText(tagId, { exact: true })).toBeVisible();
+});
+
+test("a tag set on a person shows as a pill and deleting it says who carries it", async ({
+  page,
+}) => {
+  const suffix = uniqueSuffix();
+  const roleId = `tagged-role-${suffix}`;
+  const tagId = `external-${suffix}`;
+  const name = `Tagged Person ${suffix}`;
+
+  await page.goto("/people");
+  await page.getByRole("button", { name: "Add role", exact: true }).click();
+  await page.getByLabel("Role id").fill(roleId);
+  await page.getByRole("button", { name: "Save" }).click();
+  await page.getByRole("button", { name: "Add tag", exact: true }).click();
+  await page.getByLabel("Tag id").fill(tagId);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText(tagId, { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add person", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill(name);
+  await page.getByRole("combobox", { name: /^Role/ }).selectOption(roleId);
+  await page.getByRole("group", { name: "Tags" }).getByRole("checkbox", { name: tagId }).check();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  const row = page.getByRole("row", { name });
+  await expect(row.getByText(tagId, { exact: true })).toBeVisible();
+  await row.getByRole("link", { name }).click();
+  await expect(page.getByRole("heading", { name })).toBeVisible();
+  await expect(page.getByText(tagId, { exact: true })).toBeVisible();
+
+  await page.goto("/people/catalog");
+  await expect(page.getByRole("row", { name: tagId })).toContainText("1");
+  let confirmMessage = "";
+  page.once("dialog", (dialog) => {
+    confirmMessage = dialog.message();
+    dialog.accept();
+  });
+  await page.getByRole("button", { name: `Actions for tag ${tagId}` }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await expect(page.getByRole("row", { name: tagId })).toHaveCount(0);
+  expect(confirmMessage).toBe(`Delete tag ${tagId}? It will be removed from 1 person.`);
+
+  await page.getByRole("link", { name: "Directory" }).click();
+  await expect(page.getByRole("row", { name }).getByText(tagId, { exact: true })).toHaveCount(0);
+});
+
 test("filtering the directory narrows the roster and survives a reload", async ({ page }) => {
   const suffix = uniqueSuffix();
   const ada = `Ada Filter ${suffix}`;
@@ -113,7 +183,7 @@ test("a skill nobody has shows as a coverage gap and is described on the Roles &
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(skillId, { exact: true }).locator("..")).toContainText("Nobody yet");
 
-  await page.getByRole("link", { name: "Roles & skills" }).click();
+  await page.getByRole("link", { name: "Roles, skills & tags" }).click();
   await expect(page).toHaveURL(/\/people\/catalog$/);
   await page.getByRole("button", { name: `Actions for skill ${skillId}` }).click();
   await page.getByRole("menuitem", { name: "Edit description" }).click();
@@ -122,12 +192,12 @@ test("a skill nobody has shows as a coverage gap and is described on the Roles &
   await expect(page.getByRole("row", { name: skillId })).toContainText("Spotting staffing gaps");
 });
 
-test("a skill picked for a person is hidden from their other skill rows", async ({ page }) => {
+test("a person's skills come from the catalog, each picked once", async ({ page }) => {
   const suffix = uniqueSuffix();
   const alpha = `alpha-${suffix}`;
   const beta = `beta-${suffix}`;
   const roleId = `qa-engineer-${suffix}`;
-  const suggestion = (skill: string) => page.getByRole("button", { name: skill, exact: true });
+  const name = `Catalog Skills ${suffix}`;
 
   await page.goto("/people");
   await page.getByRole("button", { name: "Add role", exact: true }).click();
@@ -141,24 +211,44 @@ test("a skill picked for a person is hidden from their other skill rows", async 
   }
 
   await page.getByRole("button", { name: "Add person", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill(`No Duplicates ${suffix}`);
+  await page.getByLabel("Name", { exact: true }).fill(name);
   await page.getByRole("combobox", { name: /^Role/ }).selectOption(roleId);
   const addSkillRow = page.getByRole("button").filter({ hasText: "+ Add skill" });
-  const skillIds = page.getByPlaceholder("skill id", { exact: true });
+  const skillRows = page.getByPlaceholder("skill id", { exact: true });
+  const suggestion = (skill: string) => page.getByRole("button", { name: skill, exact: true });
   await addSkillRow.click();
-  await skillIds.last().fill(alpha);
-  // Clicking outside the skill combobox closes its suggestion list, which would cover the button.
-  await page.getByTitle("Proficiency level (0–5)").click();
+  await skillRows.last().fill(alpha);
+  await suggestion(alpha).click();
   await addSkillRow.click();
-  await skillIds.last().fill(suffix);
+
+  // Text that names no catalog skill doesn't stick to the row.
+  await skillRows.last().fill(`not-in-catalog-${suffix}`);
+  await page.getByTitle("Proficiency level (0–5)").last().click();
+  await expect(skillRows.last()).toHaveValue("");
+
+  // Typing searches the catalog, leaving out the skill another row already has.
+  await skillRows.last().fill(suffix);
   await expect(suggestion(beta)).toBeVisible();
   await expect(suggestion(alpha)).toHaveCount(0);
-  await skillIds.first().click();
-  await expect(suggestion(alpha)).toBeVisible();
+  await skillRows.last().press("Enter");
+  await expect(skillRows.last()).toHaveValue(beta);
 
-  await skillIds.last().fill(alpha);
+  // A typed skill is only kept when it names one from the catalog.
+  const preferences = page.getByPlaceholder("search skills, or pick one below").first();
+  await preferences.fill(`not-in-catalog-${suffix}`);
+  await preferences.press("Enter");
+  await expect(preferences).toHaveValue("");
+  await expect(page.getByRole("button", { name: `Remove not-in-catalog-${suffix}` })).toHaveCount(
+    0,
+  );
+  await preferences.fill(beta);
+  await preferences.press("Enter");
+  await expect(page.getByRole("button", { name: `Remove ${beta}` })).toBeVisible();
+
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("alert")).toHaveText(`Skill "${alpha}" is listed more than once.`);
+  await page.getByRole("link", { name }).click();
+  await expect(page.getByText(alpha, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(beta, { exact: true }).first()).toBeVisible();
 });
 
 test("searching the Roles and Skill coverage cards narrows their rows", async ({ page }) => {

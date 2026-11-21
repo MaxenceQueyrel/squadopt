@@ -80,7 +80,11 @@ def solve_assignment(
             AvailabilityWindow(start=a.start, end=a.end, ratio=a.ratio)
         )
 
-    project_input = ProjectInput(id=project.id, phases=project.phases)
+    project_input = ProjectInput(
+        id=project.id,
+        phases=project.phases,
+        excluded_person_ids=[p.id for p in people if project.excluding_tags(p.tags)],
+    )
 
     people_inputs = [p.to_person_input(committed.get(p.id, [])) for p in people]
 
@@ -202,18 +206,19 @@ def solve_batch(
             AvailabilityWindow(start=a.start, end=a.end, ratio=a.ratio)
         )
 
+    people = people_repo.list(organization_id)
     portfolio = [
         PortfolioProject(
             id=project.id,
             phases=project.phases,
             priority=project.priority,
+            excluded_person_ids=[
+                p.id for p in people if project.excluding_tags(p.tags)
+            ],
         )
         for project in projects
     ]
-    people_inputs = [
-        p.to_person_input(committed.get(p.id, []))
-        for p in people_repo.list(organization_id)
-    ]
+    people_inputs = [p.to_person_input(committed.get(p.id, [])) for p in people]
 
     try:
         result = solver.solve_portfolio(portfolio, people_inputs, request.weights)

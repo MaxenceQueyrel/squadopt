@@ -51,6 +51,7 @@ export interface Person {
   preferences: string[]; // skill ids the person prefers
   growth_targets: string[]; // skill ids the person wants to grow in
   affinities: Record<string, number>; // person_id → score (-5..+5)
+  tags: string[]; // tag ids from the tag catalog
   base_capacity: number; // read-only, derived from working_days_per_week
 }
 
@@ -61,11 +62,13 @@ export interface PeopleImportSummary {
   skipped: string[]; // ids that already existed and were left untouched
   created_roles: string[]; // role ids auto-created because the CSV referenced them
   created_skills: string[]; // skill ids auto-created because the CSV referenced them
+  created_tags: string[]; // tag ids auto-created because the CSV referenced them
 }
 
 export interface ProjectsImportSummary {
   created: string[]; // ids of projects created by the import
   skipped: string[]; // ids that already existed and were left untouched
+  created_tags: string[]; // tag ids auto-created because the CSV referenced them
 }
 
 export interface ProjectPhase {
@@ -83,6 +86,7 @@ export interface Project {
   start_window: DateRange | null;
   priority: Priority;
   completed_at: string | null; // ISO date the project was marked complete
+  excluded_tags: string[]; // tag ids; anyone carrying one is kept off the whole project
 }
 
 export interface Assignment {
@@ -123,6 +127,12 @@ export interface Team {
 export interface Skill {
   id: string;
   description?: string;
+}
+
+export interface Tag {
+  id: string;
+  description: string;
+  organization_id: string;
 }
 
 export interface OptimizationWeights {

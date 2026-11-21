@@ -8,7 +8,7 @@ import { PersonForm } from "@/components/people/PersonForm";
 import { averageFreeFte, formatFte, formatHeadcount } from "@/components/projects/staffing";
 import { assignmentsApi, errorMessage, peopleApi } from "@/services/api";
 import { downloadBlob } from "@/services/download";
-import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
+import { catalogSkillIds, knownRoleIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 import type { Assignment, AvailabilitySegment, PeopleImportSummary, Person } from "@/types";
 
@@ -60,21 +60,35 @@ function summaryLine(people: Person[], freeRatios: Map<string, number>): string 
   return parts.join(" · ");
 }
 
+// "1 new role, 2 new skills and 1 new tag (External)", or "" when the import added nothing.
+function catalogAdditions(summary: PeopleImportSummary): string {
+  const parts: string[] = [];
+  const count = (n: number, noun: string) => `${n} new ${noun}${n === 1 ? "" : "s"}`;
+  if (summary.created_roles.length > 0) parts.push(count(summary.created_roles.length, "role"));
+  if (summary.created_skills.length > 0) parts.push(count(summary.created_skills.length, "skill"));
+  if (summary.created_tags.length > 0)
+    parts.push(`${count(summary.created_tags.length, "tag")} (${summary.created_tags.join(", ")})`);
+  if (parts.length < 2) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 /** Shared frame of the People workspace: the header with its summary line and roster actions,
- * the Directory / Capacity / Roles & skills tabs, and the person form they open. */
+ * the Directory / Capacity / Roles, skills & tags tabs, and the person form they open. */
 export default function PeopleWorkspace() {
   const {
     people,
     roles,
+    tags,
     fetchPeople,
     fetchProjects,
     fetchRoles,
     fetchSkills,
+    fetchTags,
     savePerson,
     importPeople,
   } = useAppStore();
   const roleOptions = useAppStore(useShallow(knownRoleIds));
-  const skillOptions = useAppStore(useShallow(knownSkillIds));
+  const skillOptions = useAppStore(useShallow(catalogSkillIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
   const location = useLocation();
   // This layout stays mounted across the tabs, so it can remember each tab's filters and
@@ -99,7 +113,8 @@ export default function PeopleWorkspace() {
     fetchProjects();
     fetchRoles();
     fetchSkills();
-  }, [fetchPeople, fetchProjects, fetchRoles, fetchSkills]);
+    fetchTags();
+  }, [fetchPeople, fetchProjects, fetchRoles, fetchSkills, fetchTags]);
 
   // Re-run whenever the roster is refetched so a saved working-pattern or vacation change, or an
   // assignment made from a person's detail page, shows up.
@@ -156,7 +171,7 @@ export default function PeopleWorkspace() {
       label: "Capacity",
       to: `/people/capacity${searches["/people/capacity"] ?? ""}`,
     },
-    { value: "catalog", label: "Roles & skills", to: "/people/catalog" },
+    { value: "catalog", label: "Roles, skills & tags", to: "/people/catalog" },
   ];
   const context: PeopleWorkspaceContext = {
     freeRatios,
@@ -212,14 +227,8 @@ export default function PeopleWorkspace() {
             </>
           )}
           .
-          {(importSummary.created_roles.length > 0 || importSummary.created_skills.length > 0) && (
-            <>
-              {" "}
-              Also added {importSummary.created_roles.length} new role
-              {importSummary.created_roles.length === 1 ? "" : "s"} and{" "}
-              {importSummary.created_skills.length} new skill
-              {importSummary.created_skills.length === 1 ? "" : "s"} to the catalog.
-            </>
+          {catalogAdditions(importSummary) && (
+            <> Also added {catalogAdditions(importSummary)} to the catalog.</>
           )}
         </Notice>
       )}
@@ -237,6 +246,7 @@ export default function PeopleWorkspace() {
           person={editing === "new" ? null : editing}
           people={people}
           roles={roles}
+          tags={tags}
           roleOptions={roleOptions}
           skillOptions={skillOptions}
           onClose={() => setEditing(null)}

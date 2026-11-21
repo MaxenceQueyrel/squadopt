@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { peopleApi, projectsApi, rolesApi, skillsApi, teamsApi } from "@/services/api";
+import { peopleApi, projectsApi, rolesApi, skillsApi, tagsApi, teamsApi } from "@/services/api";
 import type {
   OptimizationWeights,
   PeopleImportSummary,
@@ -9,6 +9,7 @@ import type {
   ProjectsImportSummary,
   Role,
   Skill,
+  Tag,
   Team,
 } from "@/types";
 
@@ -18,6 +19,7 @@ interface AppState {
   teams: Team[];
   roles: Role[];
   skills: Skill[];
+  tags: Tag[];
   optimizationWeights: OptimizationWeights;
   isLoading: boolean;
   error: string | null;
@@ -27,6 +29,7 @@ interface AppState {
   fetchTeams: () => Promise<void>;
   fetchRoles: () => Promise<void>;
   fetchSkills: () => Promise<void>;
+  fetchTags: () => Promise<void>;
 
   savePerson: (data: PersonInput, id?: string) => Promise<void>;
   deletePerson: (id: string) => Promise<void>;
@@ -37,6 +40,7 @@ interface AppState {
   deleteTeam: (id: string) => Promise<void>;
   createRole: (data: Role) => Promise<void>;
   createSkill: (data: Skill) => Promise<void>;
+  createTag: (data: Omit<Tag, "organization_id">) => Promise<void>;
 
   setWeights: (weights: Partial<OptimizationWeights>) => void;
   clearError: () => void;
@@ -54,6 +58,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   teams: [],
   roles: [],
   skills: [],
+  tags: [],
   optimizationWeights: {
     performance: 0.25,
     chemistry: 0.25,
@@ -113,6 +118,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchTags: async () => {
+    try {
+      set({ tags: await tagsApi.list() });
+    } catch (e) {
+      set({ error: message(e) });
+    }
+  },
+
   savePerson: async (data, id) => {
     set({ error: null });
     try {
@@ -139,7 +152,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ error: null });
     try {
       const summary = await peopleApi.importCsv(file);
-      await Promise.all([get().fetchPeople(), get().fetchRoles(), get().fetchSkills()]);
+      await Promise.all([
+        get().fetchPeople(),
+        get().fetchRoles(),
+        get().fetchSkills(),
+        get().fetchTags(),
+      ]);
       return summary;
     } catch (e) {
       set({ error: message(e) });
@@ -173,7 +191,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ error: null });
     try {
       const summary = await projectsApi.importCsv(file);
-      await get().fetchProjects();
+      await Promise.all([get().fetchProjects(), get().fetchTags()]);
       return summary;
     } catch (e) {
       set({ error: message(e) });
@@ -213,6 +231,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  createTag: async (data) => {
+    set({ error: null });
+    try {
+      await tagsApi.create(data);
+      await get().fetchTags();
+    } catch (e) {
+      set({ error: message(e) });
+      throw e;
+    }
+  },
+
   setWeights: (weights) =>
     set((state) => ({
       optimizationWeights: { ...state.optimizationWeights, ...weights },
@@ -220,6 +249,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+/** Skill ids in the skills catalog: the only skills a person can be given. */
+export function catalogSkillIds(state: AppState): string[] {
+  return state.skills.map((s) => s.id).sort();
+}
 
 /** Distinct skill ids known across the skills catalog, people, and projects. */
 export function knownSkillIds(state: AppState): string[] {

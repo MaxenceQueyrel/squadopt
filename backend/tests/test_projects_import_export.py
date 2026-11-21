@@ -5,8 +5,10 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.models.project import Project
+from api.models.tag import Tag
 from api.repositories.file_repository import FileRepository
 from api.v1 import projects as projects_module
+from api.v1 import tags as tags_module
 from tests.conftest import ONE_FTE_NEED, PHASE_DATES, create_org, one_phase
 
 
@@ -14,6 +16,7 @@ from tests.conftest import ONE_FTE_NEED, PHASE_DATES, create_org, one_phase
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setattr(projects_module, "repo", FileRepository("projects", Project))
+    monkeypatch.setattr(tags_module, "repo", FileRepository("tags", Tag))
     return TestClient(app)
 
 
@@ -58,6 +61,7 @@ _CSV_FIELDNAMES = (
     "completed_at",
     "phases",
     "start_window",
+    "excluded_tags",
 )
 _LEGACY_CSV_FIELDNAMES = (*_CSV_FIELDNAMES, "skill_requirements", "date_ranges")
 
@@ -71,6 +75,7 @@ def _row_values(fieldnames=_CSV_FIELDNAMES, **overrides):
         "completed_at": "",
         "phases": json.dumps(one_phase()),
         "start_window": "",
+        "excluded_tags": "[]",
         **overrides,
     }
 
@@ -96,7 +101,11 @@ def test_import_creates_new_projects(client, org_headers):
     response = _upload_csv(client, org_headers, _csv_row())
 
     assert response.status_code == 200
-    assert response.json() == {"created": ["proj-1"], "skipped": []}
+    assert response.json() == {
+        "created": ["proj-1"],
+        "skipped": [],
+        "created_tags": [],
+    }
 
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert project["name"] == "Nova Redesign"
@@ -460,7 +469,11 @@ def test_import_ignores_a_legacy_squads_column(client, org_headers):
     response = _upload_csv(client, org_headers, csv_text)
 
     assert response.status_code == 200
-    assert response.json() == {"created": ["proj-1"], "skipped": []}
+    assert response.json() == {
+        "created": ["proj-1"],
+        "skipped": [],
+        "created_tags": [],
+    }
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert "squads" not in project
 
@@ -472,7 +485,52 @@ def test_import_ignores_legacy_inclusion_and_exclusion_columns(client, org_heade
     response = _upload_csv(client, org_headers, csv_text)
 
     assert response.status_code == 200
-    assert response.json() == {"created": ["proj-1"], "skipped": []}
+    assert response.json() == {
+        "created": ["proj-1"],
+        "skipped": [],
+        "created_tags": [],
+    }
     project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
     assert "excluded_person_ids" not in project
     assert "included_person_ids" not in project
+
+
+def test_export_round_trips_excluded_tags_and_creates_missing_tags(client, org_headers):
+    for tag_id in ("External", "Contractor"):
+        client.post("/api/v1/tags/", json={"id": tag_id}, headers=org_headers)
+    excluding = _create_project(
+        client, org_headers, excluded_tags=["External", "Contractor"]
+    )
+    open_project = _create_project(client, org_headers, name="Open Project")
+
+    csv_text = client.get("/api/v1/projects/export", headers=org_headers).text
+    other_org_headers = {
+        **org_headers,
+        "X-Organization-Id": create_org(client, org_headers, name="Other Org"),
+    }
+    client.post("/api/v1/tags/", json={"id": "External"}, headers=other_org_headers)
+    response = _upload_csv(client, other_org_headers, csv_text)
+
+    assert response.status_code == 200
+    assert response.json()["created_tags"] == ["Contractor"]
+    imported = client.get(
+        f"/api/v1/projects/{excluding['id']}", headers=other_org_headers
+    ).json()
+    assert imported["excluded_tags"] == ["External", "Contractor"]
+    imported_open = client.get(
+        f"/api/v1/projects/{open_project['id']}", headers=other_org_headers
+    ).json()
+    assert imported_open["excluded_tags"] == []
+    tags = client.get("/api/v1/tags/", headers=other_org_headers).json()
+    assert sorted(tag["id"] for tag in tags) == ["Contractor", "External"]
+
+
+def test_import_accepts_a_csv_without_excluded_tags_column(client, org_headers):
+    fieldnames = [f for f in _CSV_FIELDNAMES if f != "excluded_tags"]
+    csv_text = f"{','.join(fieldnames)}\n{_row_values(fieldnames)}\n"
+
+    response = _upload_csv(client, org_headers, csv_text)
+
+    assert response.status_code == 200
+    project = client.get("/api/v1/projects/proj-1", headers=org_headers).json()
+    assert project["excluded_tags"] == []

@@ -21,6 +21,7 @@ from api.v1 import people as people_module
 from api.v1 import projects as projects_module
 from api.v1 import roles as roles_module
 from api.v1 import skills as skills_module
+from api.v1 import tags as tags_module
 from api.v1 import teams as teams_module
 
 router = APIRouter()
@@ -169,6 +170,7 @@ def delete_organization(
         assignments_module,
         roles_module,
         skills_module,
+        tags_module,
     ):
         module.repo.delete_all(str(organization.id))
     db.execute(

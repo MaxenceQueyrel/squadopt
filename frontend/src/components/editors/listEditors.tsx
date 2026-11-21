@@ -9,6 +9,7 @@ import type {
   ProjectPhase,
   SkillLevel,
   SkillRequirement,
+  Tag,
 } from "@/types";
 
 const rowStyle = {
@@ -45,6 +46,46 @@ function RemoveButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+// Typed text only filters the catalog; the row takes a skill once it is picked or typed in
+// full, and anything else reverts, so free text never reaches the person.
+function CatalogSkillPicker({
+  id,
+  options,
+  onPick,
+}: {
+  id: string;
+  options: string[];
+  onPick: (id: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const pick = (skill: string) => {
+    onPick(skill);
+    setDraft(null);
+  };
+  const settle = () => {
+    if (draft === null) return;
+    const query = draft.trim().toLowerCase();
+    const match = options.find((o) => o.toLowerCase() === query);
+    if (match) onPick(match);
+    setDraft(null);
+  };
+
+  return (
+    <Combobox
+      placeholder="skill id"
+      value={draft ?? id}
+      onChange={setDraft}
+      options={options}
+      onSelect={pick}
+      onEnter={settle}
+      onBlur={settle}
+      style={{ flex: 1 }}
+    />
+  );
+}
+
+/** A person's skill rows, each searched and picked from the catalog. A skill recorded before
+ * skills had to come from the catalog stays on its row until it is changed. */
 export function SkillsEditor({
   value,
   onChange,
@@ -56,19 +97,18 @@ export function SkillsEditor({
 }) {
   const update = (i: number, patch: Partial<SkillLevel>) =>
     onChange(value.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  const unused = skillOptions.filter((o) => !value.some((s) => s.id === o));
 
   return (
     <div>
       {value.map((s, i) => (
         <div key={i} style={rowStyle}>
-          <Combobox
-            placeholder="skill id"
-            value={s.id}
-            onChange={(id) => update(i, { id })}
+          <CatalogSkillPicker
+            id={s.id}
             options={skillOptions.filter(
-              (o) => !value.some((other, idx) => idx !== i && other.id.trim() === o),
+              (o) => !value.some((other, idx) => idx !== i && other.id === o),
             )}
-            style={{ flex: 1 }}
+            onPick={(id) => update(i, { id })}
           />
           <input
             type="number"
@@ -83,7 +123,17 @@ export function SkillsEditor({
           <RemoveButton onClick={() => onChange(value.filter((_, idx) => idx !== i))} />
         </div>
       ))}
-      <Button onClick={() => onChange([...value, { id: "", level: 3 }])}>+ Add skill</Button>
+      <Button
+        disabled={unused.length === 0}
+        onClick={() => onChange([...value, { id: "", level: 3 }])}
+      >
+        + Add skill
+      </Button>
+      {skillOptions.length === 0 && (
+        <div style={{ marginTop: 4, fontSize: "0.75rem", color: colors.muted }}>
+          Create a skill in the catalog first, then come back here to assign it.
+        </div>
+      )}
     </div>
   );
 }
@@ -344,11 +394,13 @@ export function AffinitiesEditor({
   );
 }
 
+/** Skill chips picked from `skillOptions`. Typed text only adds a skill when it names one of
+ * the options, so a skill outside them is never recorded. */
 export function TagSkillInput({
   value,
   onChange,
   skillOptions,
-  placeholder = "type a skill id, or pick one below",
+  placeholder = "search skills, or pick one below",
 }: {
   value: string[];
   onChange: (v: string[]) => void;
@@ -356,10 +408,16 @@ export function TagSkillInput({
   placeholder?: string;
 }) {
   const [draft, setDraft] = useState("");
-  const add = (tag: string) => {
-    const v = tag.trim();
-    if (v && !value.includes(v)) onChange([...value, v]);
+  const available = skillOptions.filter((o) => !value.includes(o));
+  const add = (skill: string) => {
+    onChange([...value, skill]);
     setDraft("");
+  };
+  const addTyped = () => {
+    const query = draft.trim().toLowerCase();
+    const match = available.find((o) => o.toLowerCase() === query);
+    if (match) add(match);
+    else setDraft("");
   };
 
   return (
@@ -408,14 +466,82 @@ export function TagSkillInput({
       <Combobox
         value={draft}
         onChange={setDraft}
-        options={skillOptions.filter((o) => !value.includes(o))}
+        options={available}
         placeholder={placeholder}
         onSelect={add}
-        onEnter={() => add(draft)}
-        onBlur={() => add(draft)}
-        emptyLabel="No matching skill — press Enter to add it as typed"
+        onEnter={addTyped}
+        onBlur={addTyped}
       />
     </div>
+  );
+}
+
+/** A field of checkbox chips picking tags from the catalog. Tags can't be typed, so a typo
+ * never reaches a person or project. */
+export function TagPicker({
+  label,
+  hint,
+  value,
+  onChange,
+  tags,
+}: {
+  label: string;
+  hint?: string;
+  value: string[];
+  onChange: (v: string[]) => void;
+  tags: Tag[];
+}) {
+  const toggle = (id: string) =>
+    onChange(value.includes(id) ? value.filter((t) => t !== id) : [...value, id]);
+
+  // A fieldset rather than Field: inside Field's <label>, clicking the hint would toggle the
+  // first chip.
+  return (
+    <fieldset style={{ border: "none", margin: "0 0 0.85rem", padding: 0, minWidth: 0 }}>
+      <legend style={{ padding: 0, marginBottom: 5, fontSize: "0.82rem", fontWeight: 600 }}>
+        {label}
+      </legend>
+      {hint && (
+        <div style={{ fontSize: "0.78rem", color: colors.muted, marginBottom: 5 }}>{hint}</div>
+      )}
+      {tags.length === 0 ? (
+        <div style={{ fontSize: "0.8rem", color: colors.muted }}>
+          No tags yet. Add them from the Tags card on the People page.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+          {tags.map((tag) => {
+            const checked = value.includes(tag.id);
+            return (
+              <label
+                key={tag.id}
+                title={tag.description || undefined}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "0.2rem 0.65rem",
+                  borderRadius: 999,
+                  border: `1px solid ${checked ? colors.primary : colors.borderStrong}`,
+                  background: checked ? colors.primaryBg : colors.surface,
+                  color: checked ? colors.primary : colors.text,
+                  fontSize: "0.8rem",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(tag.id)}
+                  style={{ accentColor: "var(--color-primary)", margin: 0 }}
+                />
+                {tag.id}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </fieldset>
   );
 }
 

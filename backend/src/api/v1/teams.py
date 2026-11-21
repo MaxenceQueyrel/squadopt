@@ -8,6 +8,7 @@ from api.models.project import Project
 from api.models.team import ApplyBatchRequest, Team, TeamCreate
 from api.repositories.file_repository import FileRepository
 from api.v1 import assignments as assignments_module
+from api.v1 import people as people_module
 from api.v1 import projects as projects_module
 from optimizer.grid import GRID_TOLERANCE
 from optimizer.models import ProjectInput
@@ -79,6 +80,27 @@ def _resolve_assignments(team: Team, project: Project) -> list[AssignmentCreate]
     return resolved
 
 
+def _reject_excluded_members(
+    team: Team, project: Project, organization_id: str
+) -> None:
+    people_by_id = {
+        person.id: person for person in people_module.repo.list(organization_id)
+    }
+    excluded: list[str] = []
+    for person_id in dict.fromkeys(member.person_id for member in team.members):
+        person = people_by_id.get(person_id)
+        if person is None:
+            continue
+        matching = project.excluding_tags(person.tags)
+        if matching:
+            excluded.append(f"{person.name} ({', '.join(matching)})")
+    if excluded:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Excluded from '{project.name}' by tag: " + ", ".join(excluded),
+        )
+
+
 def _over_allocated_person_ids(
     candidates: list[AssignmentBase], kept: list[Assignment]
 ) -> list[str]:
@@ -110,7 +132,8 @@ def apply_team(team_id: str, organization_id: str = Depends(require_org_member))
     schedule so it starts on that date, and the project's other assignments
     move with it; `start_window` is kept. Nothing is written, neither
     assignments nor project dates, if any date cannot be resolved or any
-    person would exceed 1.0 FTE.
+    person would exceed 1.0 FTE, or if a member carries a tag the project
+    excludes.
 
     Args:
         team_id: The team to apply.
@@ -121,7 +144,8 @@ def apply_team(team_id: str, organization_id: str = Depends(require_org_member))
 
     Raises:
         HTTPException: 404 if the team or its project is not found; 400 if a
-            phase lacks dates, or if a person would be over-allocated.
+            member is excluded from the project, a phase lacks dates, or a
+            person would be over-allocated.
     """
     team = repo.get(team_id, organization_id)
     if not team:
@@ -129,6 +153,7 @@ def apply_team(team_id: str, organization_id: str = Depends(require_org_member))
     project = projects_module.repo.get(team.project_id, organization_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    _reject_excluded_members(team, project, organization_id)
 
     offset = timedelta(0)
     if team.start_date is not None:
@@ -211,7 +236,8 @@ def apply_teams(
     Raises:
         HTTPException: 404 if a team or its project is not found; 400 if two
             teams belong to the same project, a team has a shifted start, a
-            phase lacks dates, or a person would be over-allocated.
+            member is excluded from their team's project, a phase lacks
+            dates, or a person would be over-allocated.
     """
     teams_and_projects: list[tuple[Team, Project]] = []
     for team_id in request.team_ids:
@@ -236,6 +262,9 @@ def apply_teams(
                 status_code=400,
                 detail=f"Team '{team.id}' has a shifted start; apply it on its own",
             )
+
+    for team, project in teams_and_projects:
+        _reject_excluded_members(team, project, organization_id)
 
     new_assignments: list[AssignmentBase] = []
     for team, project in teams_and_projects:

@@ -53,7 +53,7 @@ import {
   staffedFte,
 } from "@/components/projects/staffing";
 import { assignmentsApi, errorMessage, peopleApi } from "@/services/api";
-import { knownRoleIds, knownSkillIds, useAppStore } from "@/store";
+import { catalogSkillIds, knownRoleIds, knownSkillIds, useAppStore } from "@/store";
 import { useAuthStore } from "@/store/authStore";
 import type {
   Assignment,
@@ -239,15 +239,18 @@ export default function DashboardPage() {
     projects,
     teams,
     roles,
+    tags,
     fetchPeople,
     fetchProjects,
     fetchTeams,
     fetchRoles,
     fetchSkills,
+    fetchTags,
     savePerson,
     saveProject,
   } = useAppStore();
   const skills = useAppStore(useShallow(knownSkillIds));
+  const catalogSkills = useAppStore(useShallow(catalogSkillIds));
   const roleOptions = useAppStore(useShallow(knownRoleIds));
   const canWritePeople = useAuthStore((s) => s.permissions.has("people:write"));
   const canWriteProjects = useAuthStore((s) => s.permissions.has("projects:write"));
@@ -271,11 +274,20 @@ export default function DashboardPage() {
     fetchTeams();
     fetchRoles();
     fetchSkills();
+    fetchTags();
     assignmentsApi
       .list()
       .then(setAssignments)
       .catch((e) => setError(errorMessage(e)));
-  }, [activeOrganizationId, fetchPeople, fetchProjects, fetchTeams, fetchRoles, fetchSkills]);
+  }, [
+    activeOrganizationId,
+    fetchPeople,
+    fetchProjects,
+    fetchTeams,
+    fetchRoles,
+    fetchSkills,
+    fetchTags,
+  ]);
 
   // Re-run whenever the roster is refetched so a newly added person shows up.
   useEffect(() => {
@@ -385,8 +397,9 @@ export default function DashboardPage() {
           person={null}
           people={people}
           roles={roles}
+          tags={tags}
           roleOptions={roleOptions}
-          skillOptions={skills}
+          skillOptions={catalogSkills}
           onClose={() => setCreating(null)}
           onSave={async (draft) => {
             await savePerson(draft);
@@ -398,6 +411,7 @@ export default function DashboardPage() {
         <ProjectForm
           project={null}
           skillOptions={skills}
+          tags={tags}
           onClose={() => setCreating(null)}
           onSave={async (draft) => {
             await saveProject(draft);
